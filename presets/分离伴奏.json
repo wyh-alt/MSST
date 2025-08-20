@@ -1,0 +1,14 @@
+{
+    "version": "1.0.0",
+    "name": "\u5206\u79bb\u4f34\u594f",
+    "flow": [
+        {
+            "model_type": "vocal_models",
+            "model_name": "model_vocals_mdx23c_sdr_10.17.ckpt",
+            "input_to_next": "other",
+            "output_to_storage": [
+                "other"
+            ]
+        }
+    ]
+}

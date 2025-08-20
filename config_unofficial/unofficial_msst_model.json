@@ -1,0 +1,12 @@
+{
+    "multi_stem_models": [
+        {
+            "name": "logic_bs_roformer.ckpt",
+            "config_path": "config_unofficial\\msst_config\\logic_pro_config.yaml",
+            "model_type": "bs_roformer",
+            "link": ""
+        }
+    ],
+    "single_stem_models": [],
+    "vocal_models": []
+}

@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+workenv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Cache
+cache/
+.cache/
+
+# Output directories
+results/
+test_progress_output/
+
+# Large files and models
+pretrain/
+*.ckpt
+*.pth
+*.safetensors
+*.bin
+
+# Executables
+*.exe
+*.dll
+*.pyd
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# User data
+user.json
+ypd/
+
+# Backup directories
+*_backup/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
