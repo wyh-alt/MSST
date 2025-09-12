@@ -30,9 +30,9 @@ def preset():
         with gr.Row():
             skip_existing_files = gr.Checkbox(
                 label=i18n("跳过已有结果文件"),
-                value=True,
+                value=False,
                 interactive=True,
-                info=i18n("如果输出目录中已存在处理结果，将跳过该文件的处理")
+                info=i18n("仅限异常中断再次创建任务，开启将额外消耗匹配及拷贝至临时路径的时间")
             )
         
         # 添加输入方式选择卡片

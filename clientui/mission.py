@@ -33,7 +33,7 @@ class Mission:
         self.output_dir = ''
         self.preset_name = ''
         self.output_format = 'wav'
-        self.skip_existing_files = True  # 添加跳过已有文件的选项
+        self.skip_existing_files = False  # 添加跳过已有文件的选项
         self.state = 'waiting'
         self.identity = ''
         self.running = False

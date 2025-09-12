@@ -13,6 +13,15 @@ from utils.constant import *
 from utils.logger import get_logger
 logger = get_logger()
 
+def get_cache_dir():
+    """获取缓存目录"""
+    try:
+        with open('client_config.json', 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        return config.get('cache_dir', 'E:/MSSTcache/')
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "E:/MSSTcache/"  # 默认目录
+
 
 def main(input_folder, store_dir, preset_path, output_format):
     preset_data = load_configs(preset_path)
@@ -72,7 +81,7 @@ def main(input_folder, store_dir, preset_path, output_format):
         logger.info(f"创建临时目录，只处理缺失的文件")
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
         
         if os.path.exists(TEMP_PATH):
             shutil.rmtree(TEMP_PATH)
@@ -95,13 +104,14 @@ def main(input_folder, store_dir, preset_path, output_format):
         input_to_use = input_folder
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
         
         if os.path.exists(TEMP_PATH):
             shutil.rmtree(TEMP_PATH)
         os.makedirs(TEMP_PATH, exist_ok=True)
     
     tmp_store_dir = os.path.join(TEMP_PATH, "step_1_output")
+    os.makedirs(tmp_store_dir, exist_ok=True)
 
     preset = Presets(preset_data, force_cpu=False, use_tta=False, logger=logger)
 
@@ -124,11 +134,12 @@ def main(input_folder, store_dir, preset_path, output_format):
                 shutil.rmtree(input_to_use)
             input_to_use = tmp_store_dir
             tmp_store_dir = os.path.join(TEMP_PATH, f"step_{current_step + 1}_output")
-        if current_step == preset.total_steps - 1:
-            input_to_use = tmp_store_dir
-            tmp_store_dir = store_dir
         if preset.total_steps == 1:
-            # 单步处理时，输出直接到最终目录
+            # 单步处理：保持原始输入，输出直接到最终目录
+            tmp_store_dir = store_dir
+        elif current_step == preset.total_steps - 1:
+            # 多步流程的最后一步：将上一步输出作为输入
+            input_to_use = tmp_store_dir
             tmp_store_dir = store_dir
 
         data = preset.get_step(step)

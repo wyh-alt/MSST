@@ -18,20 +18,98 @@ from tools.i18n import I18nAuto
 
 # load and save config files
 def load_configs(config_path):
-    if config_path.endswith('.json'):
-        with open(config_path, 'r', encoding="utf-8") as f:
-            return json.load(f)
-    elif config_path.endswith('.yaml') or config_path.endswith('.yml'):
-        with open(config_path, 'r', encoding="utf-8") as f:
-            return ConfigDict(yaml.load(f, Loader=yaml.FullLoader))
+    def get_user_config_path(original_path):
+        """获取用户配置文件路径"""
+        import tempfile
+        import os
+        
+        user_temp = tempfile.gettempdir()
+        user_config_dir = os.path.join(user_temp, "MSST_WebUI_Config")
+        filename = os.path.basename(original_path)
+        return os.path.join(user_config_dir, filename)
+    
+    def load_from_path(path):
+        """从指定路径加载配置"""
+        if path.endswith('.json'):
+            with open(path, 'r', encoding="utf-8") as f:
+                return json.load(f)
+        elif path.endswith('.yaml') or path.endswith('.yml'):
+            with open(path, 'r', encoding="utf-8") as f:
+                return ConfigDict(yaml.load(f, Loader=yaml.FullLoader))
+    
+    try:
+        # 尝试从原始路径加载
+        return load_from_path(config_path)
+    except (FileNotFoundError, PermissionError) as e:
+        # 如果原始路径不可访问，尝试从用户目录加载
+        user_config_path = get_user_config_path(config_path)
+        if os.path.exists(user_config_path):
+            try:
+                logger.info(f"Loading configuration from user directory: {user_config_path}")
+                return load_from_path(user_config_path)
+            except Exception as user_error:
+                logger.error(f"Failed to load configuration from user directory: {user_error}")
+        
+        # 如果用户目录也不可用，尝试从备份加载
+        if config_path.endswith('webui_config.json'):
+            backup_path = config_path.replace('data/', 'data_backup/')
+            try:
+                logger.warning(f"Loading configuration from backup: {backup_path}")
+                return load_from_path(backup_path)
+            except Exception as backup_error:
+                logger.error(f"Failed to load backup configuration: {backup_error}")
+        
+        # 重新抛出原始异常
+        raise e
 
 def save_configs(config, config_path):
-    if config_path.endswith('.json'):
-        with open(config_path, 'w', encoding="utf-8") as f:
-            json.dump(config, f, indent=4)
-    elif config_path.endswith('.yaml') or config_path.endswith('.yml'):
-        with open(config_path, 'w', encoding="utf-8") as f:
-            yaml.dump(config.to_dict(), f)
+    def get_user_config_path(original_path):
+        """获取用户配置文件路径"""
+        import tempfile
+        import os
+        
+        # 获取用户临时目录
+        user_temp = tempfile.gettempdir()
+        # 创建MSST配置目录
+        user_config_dir = os.path.join(user_temp, "MSST_WebUI_Config")
+        os.makedirs(user_config_dir, exist_ok=True)
+        
+        # 使用原始文件名
+        filename = os.path.basename(original_path)
+        return os.path.join(user_config_dir, filename)
+    
+    def save_to_path(config, path):
+        """保存配置到指定路径"""
+        if path.endswith('.json'):
+            with open(path, 'w', encoding="utf-8") as f:
+                json.dump(config, f, indent=4)
+        elif path.endswith('.yaml') or path.endswith('.yml'):
+            with open(path, 'w', encoding="utf-8") as f:
+                yaml.dump(config.to_dict(), f)
+    
+    try:
+        # 尝试保存到原始路径
+        save_to_path(config, config_path)
+        logger.debug(f"Configuration saved to: {config_path}")
+    except PermissionError as e:
+        # 权限被拒绝，保存到用户目录
+        user_config_path = get_user_config_path(config_path)
+        try:
+            save_to_path(config, user_config_path)
+            logger.warning(f"Permission denied for {config_path}, saved to user directory: {user_config_path}")
+            
+            # 更新常量文件中的路径引用（仅对特定配置文件）
+            if config_path == WEBUI_CONFIG:
+                import utils.constant
+                utils.constant.WEBUI_CONFIG = user_config_path
+                logger.info(f"Updated WEBUI_CONFIG path to: {user_config_path}")
+                
+        except Exception as fallback_error:
+            logger.error(f"Failed to save configuration to user directory {user_config_path}: {fallback_error}")
+            # 最后的回退：显示警告但不崩溃
+            logger.warning("Configuration changes will not be persisted for this session")
+    except Exception as e:
+        logger.error(f"Unexpected error saving configuration to {config_path}: {e}")
 
 def color_config(config):
     def format_dict(d):
@@ -82,18 +160,37 @@ def webui_restart():
 
 # setup webui debug mode
 def log_level_debug(isdug):
-    config = load_configs(WEBUI_CONFIG)
+    try:
+        config = load_configs(WEBUI_CONFIG)
+    except Exception as e:
+        logger.warning(f"Could not load config for debug setting: {e}")
+        # 即使无法加载配置，也要设置日志级别
+        if isdug:
+            set_log_level(logger, logging.DEBUG)
+            logger.info("Console log level set to \033[34mDEBUG\033[0m")
+            return i18n("已开启调试日志")
+        else:
+            set_log_level(logger, logging.INFO)
+            logger.info("Console log level set to \033[32mINFO\033[0m")
+            return i18n("已关闭调试日志")
+    
     if isdug:
         set_log_level(logger, logging.DEBUG)
         config["settings"]["debug"] = True
-        save_configs(config, WEBUI_CONFIG)
-        logger.info("Console log level set to \033[34mDEBUG\033[0m")
+        try:
+            save_configs(config, WEBUI_CONFIG)
+            logger.info("Console log level set to \033[34mDEBUG\033[0m")
+        except Exception as e:
+            logger.warning(f"Debug level set but could not save config: {e}")
         return i18n("已开启调试日志")
     else:
         set_log_level(logger, logging.INFO)
         config["settings"]["debug"] = False
-        save_configs(config, WEBUI_CONFIG)
-        logger.info("Console log level set to \033[32mINFO\033[0m")
+        try:
+            save_configs(config, WEBUI_CONFIG)
+            logger.info("Console log level set to \033[32mINFO\033[0m")
+        except Exception as e:
+            logger.warning(f"Debug level set but could not save config: {e}")
         return i18n("已关闭调试日志")
 
 
@@ -111,26 +208,95 @@ def load_selected_model(model_type=None):
         model_type = webui_config["inference"]["model_type"]
     if model_type:
         downloaded_model = []
-        model_dir = os.path.join(MODEL_FOLDER, model_type)
-
-        for files in os.listdir(model_dir):
-            if files.endswith(('.ckpt', '.th', '.chpt')):
-                try: 
-                    get_msst_model(files, model_type)
-                    downloaded_model.append(files)
-                except: 
-                    continue
+        
+        # 智能路径处理：尝试多种可能的模型目录位置
+        possible_model_dirs = [
+            os.path.join(MODEL_FOLDER, model_type),  # 相对路径
+            os.path.join(os.getcwd(), MODEL_FOLDER, model_type),  # 当前工作目录
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", MODEL_FOLDER, model_type),  # 脚本相对路径
+            os.path.join(os.path.abspath(MODEL_FOLDER), model_type) if os.path.exists(MODEL_FOLDER) else None  # 绝对路径
+        ]
+        
+        # 过滤掉None值
+        possible_model_dirs = [d for d in possible_model_dirs if d is not None]
+        
+        # 尝试各种可能的路径
+        model_dir = None
+        for dir_path in possible_model_dirs:
+            try:
+                normalized_path = os.path.abspath(dir_path)
+                if os.path.exists(normalized_path):
+                    model_dir = normalized_path
+                    logger.debug(f"Found model directory for {model_type}: {model_dir}")
+                    break
+            except Exception as e:
+                logger.debug(f"Failed to check model directory {dir_path}: {e}")
+                continue
+        
+        # Check if model directory exists
+        if not model_dir:
+            logger.warning(f"Model directory does not exist for type: {model_type}")
+            logger.warning(f"Tried paths: {possible_model_dirs}")
+            return []
+        
+        try:
+            for files in os.listdir(model_dir):
+                if files.endswith(('.ckpt', '.th', '.chpt')):
+                    try: 
+                        get_msst_model(files, model_type)
+                        downloaded_model.append(files)
+                    except: 
+                        continue
+        except OSError as e:
+            logger.error(f"Error accessing model directory {model_dir}: {e}")
+            return []
+        
         return downloaded_model
-    return None
+    return []
 
 def load_msst_model():
     config = load_configs(MSST_MODEL)
     model_list = []
-    model_dir = [os.path.join(MODEL_FOLDER, keys) for keys in config.keys()]
-    for dirs in model_dir:
-        for files in os.listdir(dirs):
-            if files.endswith(('.ckpt', '.th', '.chpt')):
-                model_list.append(files)
+    
+    # 为每个模型类型尝试多种可能的路径
+    for keys in config.keys():
+        possible_model_dirs = [
+            os.path.join(MODEL_FOLDER, keys),  # 相对路径
+            os.path.join(os.getcwd(), MODEL_FOLDER, keys),  # 当前工作目录
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", MODEL_FOLDER, keys),  # 脚本相对路径
+            os.path.join(os.path.abspath(MODEL_FOLDER), keys) if os.path.exists(MODEL_FOLDER) else None  # 绝对路径
+        ]
+        
+        # 过滤掉None值
+        possible_model_dirs = [d for d in possible_model_dirs if d is not None]
+        
+        # 尝试各种可能的路径
+        model_dir = None
+        for dir_path in possible_model_dirs:
+            try:
+                normalized_path = os.path.abspath(dir_path)
+                if os.path.exists(normalized_path):
+                    model_dir = normalized_path
+                    logger.debug(f"Found MSST model directory for {keys}: {model_dir}")
+                    break
+            except Exception as e:
+                logger.debug(f"Failed to check MSST model directory {dir_path}: {e}")
+                continue
+        
+        # Check if model directory exists
+        if not model_dir:
+            logger.warning(f"Model directory does not exist: {keys}")
+            logger.debug(f"Tried paths for {keys}: {possible_model_dirs}")
+            continue
+        
+        try:
+            for files in os.listdir(model_dir):
+                if files.endswith(('.ckpt', '.th', '.chpt')):
+                    model_list.append(files)
+        except OSError as e:
+            logger.error(f"Error accessing model directory {model_dir}: {e}")
+            continue
+    
     return model_list
 
 def get_msst_model(model_name, model_type=None):
@@ -167,18 +333,80 @@ def load_vr_model():
     downloaded_model = []
     config = load_configs(WEBUI_CONFIG)
     vr_model_path = config['settings']['uvr_model_dir']
-    for files in os.listdir(vr_model_path):
-        if files.endswith('.pth'):
-            try: 
-                get_vr_model(files)
-                downloaded_model.append(files)
-            except: 
-                continue
+    
+    # 规范化路径分隔符，避免 D:\\... 之类路径导致找不到目录
+    if isinstance(vr_model_path, str):
+        vr_model_path = vr_model_path.replace('\\\\', '/').replace('\\', '/')
+    
+    # 智能路径处理和回退机制
+    possible_paths = [
+        vr_model_path,  # 配置文件中的原始路径
+        os.path.abspath(vr_model_path),  # 绝对路径
+        os.path.join(os.getcwd(), "pretrain", "VR_Models"),  # 当前工作目录下的相对路径
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pretrain", "VR_Models"),  # 脚本相对路径
+        "pretrain/VR_Models",  # 简单相对路径
+        "./pretrain/VR_Models"  # 当前目录相对路径
+    ]
+    
+    # 尝试各种可能的路径
+    final_vr_model_path = None
+    for path in possible_paths:
+        try:
+            if isinstance(path, str):
+                path = path.replace('\\', '/')
+                normalized_path = os.path.abspath(path)
+                if os.path.isdir(normalized_path):
+                    final_vr_model_path = normalized_path
+                    logger.info(f"Found VR model directory: {final_vr_model_path}")
+                    break
+        except Exception as e:
+            logger.debug(f"Failed to check path {path}: {e}")
+            continue
+    
+    # 若目录不存在，给出更友好的错误和解决建议
+    if not final_vr_model_path:
+        error_msg = f"VR模型目录不存在，请检查以下可能的路径：\n"
+        for i, path in enumerate(possible_paths, 1):
+            try:
+                abs_path = os.path.abspath(path) if isinstance(path, str) else str(path)
+                error_msg += f"{i}. {abs_path}\n"
+            except:
+                error_msg += f"{i}. {path}\n"
+        error_msg += "\n解决方案：\n"
+        error_msg += "1. 在设置中重新配置VR模型目录路径\n"
+        error_msg += "2. 确保pretrain/VR_Models目录存在\n"
+        error_msg += "3. 检查目录权限设置"
+        raise gr.Error(i18n(error_msg))
+    
+    # 更新配置文件中的路径为找到的有效路径（使用正斜杠格式）
+    try:
+        if final_vr_model_path != vr_model_path:
+            config['settings']['uvr_model_dir'] = final_vr_model_path.replace('\\', '/')
+            save_configs(config, WEBUI_CONFIG)
+            logger.info(f"Updated VR model path in config: {final_vr_model_path}")
+    except Exception as e:
+        logger.warning(f"Failed to update config with new VR model path: {e}")
+    
+    # 扫描模型文件
+    try:
+        for files in os.listdir(final_vr_model_path):
+            if files.endswith('.pth'):
+                try: 
+                    get_vr_model(files)
+                    downloaded_model.append(files)
+                except: 
+                    continue
+    except OSError as e:
+        logger.error(f"Error accessing VR model directory {final_vr_model_path}: {e}")
+        raise gr.Error(i18n(f"无法访问VR模型目录: {final_vr_model_path}. 错误: {e}"))
+    
     return downloaded_model
 
 def get_vr_model(model):
     config = load_configs(VR_MODEL)
     model_path = load_configs(WEBUI_CONFIG)['settings']['uvr_model_dir']
+    if isinstance(model_path, str):
+        model_path = model_path.replace('\\\\', '/').replace('\\', '/')
     main_link = get_main_link()
 
     for keys in config.keys():

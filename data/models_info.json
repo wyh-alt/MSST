@@ -260,7 +260,7 @@
         "model_name": "model_mdx23c_ep_168_sdr_7.0207.ckpt",
         "model_size": 448119834,
         "sha256": "c1d31e3c47a98e8cdb12b3382a1a313c1a95c835da4310dd6350e7e1892f821c",
-        "is_installed": false,
+        "is_installed": true,
         "target_position": "./pretrain/multi_stem_models/model_mdx23c_ep_168_sdr_7.0207.ckpt"
     },
     "scnet_checkpoint_musdb18.ckpt": {
@@ -508,7 +508,7 @@
         "model_name": "model_vocals_mdx23c_sdr_10.17.ckpt",
         "model_size": 448101203,
         "sha256": "49d51472769e34a2501cd1da782346a3212555c3a5619fc2c53507445528d816",
-        "is_installed": false,
+        "is_installed": true,
         "target_position": "./pretrain/vocal_models/model_vocals_mdx23c_sdr_10.17.ckpt"
     },
     "model_vocals_mel_band_roformer_sdr_8.42.ckpt": {

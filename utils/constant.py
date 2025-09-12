@@ -127,7 +127,7 @@ METRICS = ['sdr', 'l1_freq', 'si_sdr', 'log_wmse', 'aura_stft', 'aura_mrstft', '
 ENSEMBLE_MODES = ["avg_wave", "median_wave", "min_wave", "max_wave", "avg_fft", "median_fft", "min_fft", "max_fft"]
 
 # ffmpeg executable path, if not found, use system ffmpeg
-FFMPEG = ".\\ffmpeg\\bin\\ffmpeg.exe" if os.path.isfile(".\\ffmpeg\\bin\\ffmpeg.exe") else "ffmpeg"
+FFMPEG = "./ffmpeg/bin/ffmpeg.exe" if os.path.isfile("./ffmpeg/bin/ffmpeg.exe") else "ffmpeg"
 
 # python executable path, if not found, use current python
-PYTHON = ".\\workenv\\python.exe" if os.path.isfile(".\\workenv\\python.exe") else sys.executable
+PYTHON = "./workenv/python.exe" if os.path.isfile("./workenv/python.exe") else sys.executable

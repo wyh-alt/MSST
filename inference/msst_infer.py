@@ -151,7 +151,7 @@ class MSSeparator:
 
 		return waveforms_orig
 
-	def process_folder(self, input_folder, skip_existing_files=True):
+	def process_folder(self, input_folder, skip_existing_files=False):
 		if not os.path.isdir(input_folder):
 			raise ValueError(f"Input folder '{input_folder}' does not exist.")
 

@@ -15,6 +15,15 @@ from webui.setup import setup_webui, set_debug
 from utils.constant import *
 from utils.logger import get_logger
 
+def get_cache_dir():
+    """获取缓存目录"""
+    try:
+        with open('client_config.json', 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        return config.get('cache_dir', 'E:/MSSTcache/')
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "E:/MSSTcache/"  # 默认目录
+
 # 导入任务进度追踪
 try:
     from clientui.task_progress import task_progress
@@ -55,7 +64,7 @@ def update_progress(input_folder, processed_count):
         print(f"更新进度时出错: {e}")
 
 
-def main(input_folder, store_dir, preset_path, output_format, skip_existing_files=True):
+def main(input_folder, store_dir, preset_path, output_format, skip_existing_files=False):
     print(f"调试信息 - preset_infer_cli.main: 开始执行")
     print(f"调试信息 - 输入文件夹: {input_folder}")
     print(f"调试信息 - 输出目录: {store_dir}")
@@ -146,7 +155,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         print(f"调试信息 - 创建临时目录，只处理缺失的文件")
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
         
         print(f"调试信息 - 临时路径: {TEMP_PATH}")
         
@@ -172,7 +181,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         input_to_use = input_folder
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
         
         print(f"调试信息 - 临时路径: {TEMP_PATH}")
         
@@ -181,6 +190,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         os.makedirs(TEMP_PATH, exist_ok=True)
     
     tmp_store_dir = os.path.join(TEMP_PATH, "step_1_output")
+    os.makedirs(tmp_store_dir, exist_ok=True)
 
     preset = Presets(preset_data, force_cpu=False, use_tta=False, logger=logger)
 
@@ -203,11 +213,12 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
                 shutil.rmtree(input_to_use)
             input_to_use = tmp_store_dir
             tmp_store_dir = os.path.join(TEMP_PATH, f"step_{current_step + 1}_output")
-        if current_step == preset.total_steps - 1:
-            input_to_use = tmp_store_dir
-            tmp_store_dir = store_dir
         if preset.total_steps == 1:
-            # 单步处理时，输出直接到最终目录
+            # 单步处理：保持原始输入，输出直接到最终目录
+            tmp_store_dir = store_dir
+        elif current_step == preset.total_steps - 1:
+            # 多步流程的最后一步：将上一步输出作为输入
+            input_to_use = tmp_store_dir
             tmp_store_dir = store_dir
 
         data = preset.get_step(step)
@@ -274,7 +285,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
                 f"time cost: {round(time.time() - start_time, 2)}s\033[0m")
 
 
-def main_batch(input_folders, store_dir, preset_path, output_format, skip_existing_files=True):
+def main_batch(input_folders, store_dir, preset_path, output_format, skip_existing_files=False):
     """
     批量处理多个文件夹，复用已加载的模型
     """
@@ -328,7 +339,7 @@ def main_batch(input_folders, store_dir, preset_path, output_format, skip_existi
     # 使用全局缓存目录，为每个批量任务创建唯一的临时目录
     import uuid
     task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-    TEMP_PATH = os.path.join("E:/MSSTcache", f"batch_task_{task_id}")
+    TEMP_PATH = os.path.join(get_cache_dir(), f"batch_task_{task_id}")
     
     print(f"调试信息 - 批量任务临时路径: {TEMP_PATH}")
     

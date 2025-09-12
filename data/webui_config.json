@@ -3,8 +3,8 @@
     "inference": {
         "model_type": "multi_stem_models",
         "selected_model": null,
-        "input_dir": "C:\\Users\\wyh_a\\AppData\\Local\\Temp\\tmpfa3_rh4l\\input",
-        "store_dir": "C:\\Users\\wyh_a\\AppData\\Local\\Temp\\tmpfa3_rh4l\\output",
+        "input_dir": "C:/Users/wyh_a/AppData/Local/Temp/tmpfa3_rh4l/input",
+        "store_dir": "C:/Users/wyh_a/AppData/Local/Temp/tmpfa3_rh4l/output",
         "device": null,
         "output_format": "wav",
         "force_cpu": false,
@@ -60,8 +60,8 @@
         "results_path": null
     },
     "settings": {
-        "uvr_model_dir": "D:/Ultimate Vocal Remover/models/VR_Models",
-        "port": 0,
+        "uvr_model_dir": "E:/项目/2025/202508/MSST/MSST WebUI/MSST WebUI/pretrain/VR_Models",
+        "port": 7860,
         "language": "Auto",
         "download_link": "Auto",
         "local_link": false,
@@ -71,6 +71,10 @@
         "theme": "theme_blue.json",
         "wav_bit_depth": "FLOAT",
         "flac_bit_depth": "PCM_24",
-        "mp3_bit_rate": "320k"
+        "mp3_bit_rate": "320k",
+        "input_dir": "C:/Users/wyh_a/AppData/Local/MSST_WebUI/user",
+        "output_dir": "C:/Users/wyh_a/AppData/Local/MSST_WebUI/user",
+        "cache_dir": "C:/Users/wyh_a/AppData/Local/MSST_WebUI/cache",
+        "user_dir": "C:/Users/wyh_a/AppData/Local/MSST_WebUI/user"
     }
 }

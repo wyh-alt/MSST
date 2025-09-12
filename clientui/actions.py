@@ -11,8 +11,26 @@ from clientui.mission import Mission, manager, write_thread_count
 from clientui.task_progress import task_progress
 import zipfile
 
-client_dir = Path('E:/MSSTuser')
+# 从配置文件加载用户目录设置
+def get_client_dir():
+    """获取客户端用户目录"""
+    try:
+        with open('client_config.json', 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        return Path(config.get('user_dir', 'E:/MSSTuser'))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return Path('E:/MSSTuser')  # 默认目录
 
+client_dir = get_client_dir()
+
+def get_cache_dir():
+    """获取缓存目录"""
+    try:
+        with open('client_config.json', 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        return config.get('cache_dir', 'E:/MSSTcache/')
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "E:/MSSTcache/"  # 默认目录
 
 def switch2user_tab(req: gr.Request):
     from client import is_admin
@@ -64,7 +82,7 @@ def delete_user(req: gr.Request, username):
 
 
 def clear_cache():
-    cache_dir = os.path.abspath("E:/MSSTcache/")
+    cache_dir = os.path.abspath(get_cache_dir())
     shutil.rmtree(cache_dir, ignore_errors=True)
     gr.Info('清空缓存成功')
 
@@ -178,17 +196,11 @@ def delete_mission(req: gr.Request, mission):
     
     # 清理缓存文件
     try:
-        cache_dir = "E:/MSSTcache"
+        cache_dir = get_cache_dir()
         if os.path.exists(cache_dir):
-            # 清理preset_task_开头的临时目录（多步骤预设缓存）
-            for item in os.listdir(cache_dir):
-                item_path = os.path.join(cache_dir, item)
-                if os.path.isdir(item_path) and item.startswith("preset_task_"):
-                    try:
-                        shutil.rmtree(item_path)
-                        print(f"已清理临时缓存目录: {item}")
-                    except Exception as e:
-                        print(f"清理临时缓存目录时出错: {e}")
+            # 为避免误删正在使用的临时目录，这里不再删除 preset_task_* 目录
+            # 这些目录会在任务结束时自行清理，或通过“清空缓存”功能统一处理
+            pass
             
             # 清理tmp开头的临时文件（Gradio缓存）
             for item in os.listdir(cache_dir):
@@ -573,7 +585,7 @@ def infer(req: gr.Request,
           output_path,
           output_format,
           selected_tab=None,
-          skip_existing_files=True):
+          skip_existing_files=False):
     if preset_name is None:
         return gr.Warning('请选择预设')
     
@@ -595,13 +607,10 @@ def infer(req: gr.Request,
         input_dir.mkdir(parents=True, exist_ok=True)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        sub_idx = 0
+        # 将同一批上传的所有文件直接放入同一个输入目录，作为单个任务处理
         for input_audio in input_audios:
             input_path_obj = Path(input_audio)
-            sub_dir = input_dir / f'{sub_idx}'
-            sub_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(input_path_obj, sub_dir / input_path_obj.name)
-            sub_idx += 1
+            shutil.copyfile(input_path_obj, input_dir / input_path_obj.name)
 
         mission_json = mission_dir / 'mission.json'
         mission = Mission()

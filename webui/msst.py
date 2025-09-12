@@ -111,7 +111,7 @@ def run_multi_inference(selected_model, input_folder, store_dir, extract_instrum
     save_msst_inference_config(selected_model, input_folder, store_dir, extract_instrumental, gpu_id, output_format, force_cpu, use_tta)
     return start_inference(selected_model, input_folder, store_dir, extract_instrumental, gpu_id, output_format, force_cpu, use_tta)
 
-def start_inference(selected_model, input_folder, store_dir, extract_instrumental, gpu_id, output_format, force_cpu, use_tta, skip_existing_files=True):
+def start_inference(selected_model, input_folder, store_dir, extract_instrumental, gpu_id, output_format, force_cpu, use_tta, skip_existing_files=False):
     if selected_model == "":
         return gr.Error(i18n("请选择模型"))
     if input_folder == "":
@@ -176,7 +176,7 @@ def start_inference(selected_model, input_folder, store_dir, extract_instrumenta
     else:
         return i18n("用户强制终止")
 
-def run_inference(model_type, config_path, model_path, device, gpu_ids, output_format, use_tta, store_dict, debug, wav_bit_depth, flac_bit_depth, mp3_bit_rate, input_folder, result_queue, skip_existing_files=True):
+def run_inference(model_type, config_path, model_path, device, gpu_ids, output_format, use_tta, store_dict, debug, wav_bit_depth, flac_bit_depth, mp3_bit_rate, input_folder, result_queue, skip_existing_files=False):
     logger.debug(f"Start MSST inference process with parameters: model_type={model_type}, config_path={config_path}, model_path={model_path}, device={device}, gpu_ids={gpu_ids}, output_format={output_format}, use_tta={use_tta}, store_dict={store_dict}, debug={debug}, wav_bit_depth={wav_bit_depth}, flac_bit_depth={flac_bit_depth}, mp3_bit_rate={mp3_bit_rate}, input_folder={input_folder}, skip_existing_files={skip_existing_files}")
 
     try:
@@ -207,7 +207,7 @@ def run_inference(model_type, config_path, model_path, device, gpu_ids, output_f
         result_queue.put(("error", str(e)))
 
 
-def run_inference_batch(model_type, config_path, model_path, device, gpu_ids, output_format, use_tta, store_dict, debug, wav_bit_depth, flac_bit_depth, mp3_bit_rate, input_folders, result_queue, skip_existing_files=True):
+def run_inference_batch(model_type, config_path, model_path, device, gpu_ids, output_format, use_tta, store_dict, debug, wav_bit_depth, flac_bit_depth, mp3_bit_rate, input_folders, result_queue, skip_existing_files=False):
     """
     批量处理多个文件夹，复用已加载的模型
     """

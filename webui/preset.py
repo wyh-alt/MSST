@@ -21,6 +21,15 @@ from webui.utils import (
     detailed_error
 )
 
+def get_cache_dir():
+    """获取缓存目录"""
+    try:
+        with open('client_config.json', 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        return config.get('cache_dir', 'E:/MSSTcache/')
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "E:/MSSTcache/"  # 默认目录
+
 def get_presets_list() -> list:
     if os.path.exists(PRESETS):
         presets = [file for file in os.listdir(PRESETS) if file.endswith(".json")]
@@ -236,7 +245,7 @@ class Presets:
                 return False, model_name
         return True, None
 
-    def msst_infer(self, model_type, config_path, model_path, input_folder, store_dict, output_format="wav", skip_existing_files=True):
+    def msst_infer(self, model_type, config_path, model_path, input_folder, store_dict, output_format="wav", skip_existing_files=False):
         from webui.msst import run_inference
 
         result_queue = multiprocessing.Queue()
@@ -260,7 +269,7 @@ class Presets:
         elif result[0] == "error":
             return 0, result[1]
 
-    def msst_infer_batch(self, model_type, config_path, model_path, input_folders, store_dict, output_format="wav", skip_existing_files=True):
+    def msst_infer_batch(self, model_type, config_path, model_path, input_folders, store_dict, output_format="wav", skip_existing_files=False):
         """
         批量处理多个文件夹，复用已加载的模型
         """
@@ -287,7 +296,7 @@ class Presets:
         elif result[0] == "error":
             return 0, result[1]
 
-    def vr_infer(self, model_name, input_folder, output_dir, output_format="wav", skip_existing_files=True):
+    def vr_infer(self, model_name, input_folder, output_dir, output_format="wav", skip_existing_files=False):
         from webui.vr import run_inference
 
         model_file = os.path.join(self.vr_model_path, model_name)
@@ -320,7 +329,8 @@ def preset_inference_audio(input_audio, store_dir, preset, force_cpu, output_for
     # 使用全局缓存目录，为每个任务创建唯一的临时目录
     import uuid
     task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-    TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+    
+    TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
     
     if os.path.exists(TEMP_PATH):
         shutil.rmtree(TEMP_PATH)
@@ -332,7 +342,7 @@ def preset_inference_audio(input_audio, store_dir, preset, force_cpu, output_for
     msg = preset_inference(input_folder, store_dir, preset, force_cpu, output_format, use_tta, is_audio=True)
     return msg
 
-def preset_inference(input_folder, store_dir, preset_name, force_cpu, output_format, use_tta, is_audio=False, skip_existing_files=True):
+def preset_inference(input_folder, store_dir, preset_name, force_cpu, output_format, use_tta, is_audio=False, skip_existing_files=False):
     if preset_name not in os.listdir(PRESETS):
         return i18n("预设") + preset_name + i18n("不存在")
 
@@ -405,7 +415,7 @@ def preset_inference(input_folder, store_dir, preset_name, force_cpu, output_for
         logger.info(f"创建临时目录，只处理缺失的文件")
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
         
         if os.path.exists(TEMP_PATH):
             shutil.rmtree(TEMP_PATH)
@@ -428,13 +438,14 @@ def preset_inference(input_folder, store_dir, preset_name, force_cpu, output_for
         input_to_use = input_folder
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
         
         if os.path.exists(TEMP_PATH):
             shutil.rmtree(TEMP_PATH)
         os.makedirs(TEMP_PATH, exist_ok=True)
     
     tmp_store_dir = os.path.join(TEMP_PATH, "step_1_output")
+    os.makedirs(tmp_store_dir, exist_ok=True)
 
     preset = Presets(preset_data, force_cpu, use_tta, logger)
 
@@ -457,11 +468,12 @@ def preset_inference(input_folder, store_dir, preset_name, force_cpu, output_for
                 shutil.rmtree(input_to_use)
             input_to_use = tmp_store_dir
             tmp_store_dir = os.path.join(TEMP_PATH, f"step_{current_step + 1}_output")
-        if current_step == preset.total_steps - 1:
-            input_to_use = tmp_store_dir
-            tmp_store_dir = store_dir
         if preset.total_steps == 1:
-            # 单步处理时，输出直接到最终目录
+            # 单步处理：保持原始输入，输出直接到最终目录
+            tmp_store_dir = store_dir
+        elif current_step == preset.total_steps - 1:
+            # 多步流程的最后一步：将上一步输出作为输入
+            input_to_use = tmp_store_dir
             tmp_store_dir = store_dir
 
         data = preset.get_step(step)

@@ -59,7 +59,7 @@ def vr_inference_multi(vr_select_model, vr_window_size, vr_aggression, vr_output
     save_vr_inference_config(vr_select_model, vr_window_size, vr_aggression, vr_output_format, vr_use_cpu, vr_primary_stem_only, vr_secondary_stem_only, folder_input, vr_store_dir, vr_batch_size, vr_post_process_threshold, vr_invert_spect, vr_enable_tta, vr_high_end_process, vr_enable_post_process)
     return start_inference(vr_select_model, vr_window_size, vr_aggression, vr_output_format, vr_use_cpu, vr_primary_stem_only, vr_secondary_stem_only, folder_input, vr_store_dir, vr_batch_size, vr_post_process_threshold, vr_invert_spect, vr_enable_tta, vr_high_end_process, vr_enable_post_process)
 
-def start_inference(vr_select_model, vr_window_size, vr_aggression, vr_output_format, vr_use_cpu, vr_primary_stem_only, vr_secondary_stem_only, audio_input, vr_store_dir, vr_batch_size, vr_post_process_threshold, vr_invert_spect, vr_enable_tta, vr_high_end_process, vr_enable_post_process, skip_existing_files=True):
+def start_inference(vr_select_model, vr_window_size, vr_aggression, vr_output_format, vr_use_cpu, vr_primary_stem_only, vr_secondary_stem_only, audio_input, vr_store_dir, vr_batch_size, vr_post_process_threshold, vr_invert_spect, vr_enable_tta, vr_high_end_process, vr_enable_post_process, skip_existing_files=False):
     if not audio_input:
         return i18n("请上传至少一个音频文件!")
     if not vr_select_model:
@@ -109,7 +109,7 @@ def start_inference(vr_select_model, vr_window_size, vr_aggression, vr_output_fo
     else:
         return i18n("用户强制终止")
 
-def run_inference(debug, model_file, output_dir, output_format, invert_using_spec, use_cpu, batch_size, window_size, aggression, enable_tta, enable_post_process, post_process_threshold, high_end_process, wav_bit_depth, flac_bit_depth, mp3_bit_rate, input_folder, result_queue, skip_existing_files=True):
+def run_inference(debug, model_file, output_dir, output_format, invert_using_spec, use_cpu, batch_size, window_size, aggression, enable_tta, enable_post_process, post_process_threshold, high_end_process, wav_bit_depth, flac_bit_depth, mp3_bit_rate, input_folder, result_queue, skip_existing_files=False):
     logger.debug(f"Start VR inference process with parameters: debug={debug}, model_file={model_file}, output_dir={output_dir}, output_format={output_format}, invert_using_spec={invert_using_spec}, use_cpu={use_cpu}, batch_size={batch_size}, window_size={window_size}, aggression={aggression}, enable_tta={enable_tta}, enable_post_process={enable_post_process}, post_process_threshold={post_process_threshold}, high_end_process={high_end_process}, wav_bit_depth={wav_bit_depth}, flac_bit_depth={flac_bit_depth}, mp3_bit_rate={mp3_bit_rate}, input_folder={input_folder}, skip_existing_files={skip_existing_files}")
 
     try:
