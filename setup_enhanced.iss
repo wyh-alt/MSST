@@ -256,7 +256,7 @@ begin
       '        "output_format": "wav",' + #13#10 +
       '        "sample_rate": 44100,' + #13#10 +
       '        "channels": 2,' + #13#10 +
-      '        "wav_bit_depth": "PCM-16",' + #13#10 +
+      '        "wav_bit_depth": "PCM_16",' + #13#10 +
       '        "flac_bit_depth": "16-bit",' + #13#10 +
       '        "mp3_bit_rate": "320k",' + #13#10 +
       '        "ogg_bit_rate": "320k",' + #13#10 +
@@ -291,7 +291,7 @@ begin
       '        "auto_clean_cache": true,' + #13#10 +
       '        "debug": false,' + #13#10 +
       '        "theme": "theme_blue.json",' + #13#10 +
-      '        "wav_bit_depth": "FLOAT",' + #13#10 +
+      '        "wav_bit_depth": "PCM_16",' + #13#10 +
       '        "flac_bit_depth": "PCM_24",' + #13#10 +
       '        "mp3_bit_rate": "320k",' + #13#10 +
       '        "input_dir": "' + InputDir + '",' + #13#10 +
