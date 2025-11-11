@@ -13,14 +13,49 @@ from utils.constant import *
 from utils.logger import get_logger
 logger = get_logger()
 
-def get_cache_dir():
-    """获取缓存目录"""
+# 导入任务进度追踪
+try:
+    from clientui.task_progress import task_progress
+except ImportError:
+    task_progress = None
+
+
+def update_step_progress(input_folder, step_index, processed_count):
+    """
+    更新步骤处理进度
+    """
+    if not task_progress:
+        return
+        
+    # 尝试查找任务目录
     try:
-        with open('client_config.json', 'r', encoding='utf-8') as f:
-            config = json.load(f)
-        return config.get('cache_dir', 'E:/MSSTcache/')
-    except (FileNotFoundError, json.JSONDecodeError):
-        return "E:/MSSTcache/"  # 默认目录
+        # 查找包含mission.json或mission_*.json的父目录
+        current_dir = os.path.dirname(input_folder) if os.path.isfile(input_folder) else input_folder
+        mission_dir = None
+        
+        # 向上查找任务目录（最多3层）
+        for _ in range(3):
+            if not current_dir or current_dir == os.path.dirname(current_dir):
+                break
+            
+            # 检查当前目录是否有mission.json
+            mission_files = []
+            if os.path.exists(current_dir):
+                for f in os.listdir(current_dir):
+                    if f.startswith('mission') and f.endswith('.json'):
+                        mission_files.append(f)
+            
+            if mission_files:
+                mission_dir = current_dir
+                break
+            
+            current_dir = os.path.dirname(current_dir)
+        
+        if mission_dir:
+            # 更新步骤进度
+            task_progress.update_step_progress(mission_dir, step_index, processed_count)
+    except Exception as e:
+        logger.debug(f"更新步骤进度时出错: {e}")
 
 
 def main(input_folder, store_dir, preset_path, output_format):
@@ -81,7 +116,7 @@ def main(input_folder, store_dir, preset_path, output_format):
         logger.info(f"创建临时目录，只处理缺失的文件")
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
         
         if os.path.exists(TEMP_PATH):
             shutil.rmtree(TEMP_PATH)
@@ -104,7 +139,7 @@ def main(input_folder, store_dir, preset_path, output_format):
         input_to_use = input_folder
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
         
         if os.path.exists(TEMP_PATH):
             shutil.rmtree(TEMP_PATH)
@@ -124,6 +159,14 @@ def main(input_folder, store_dir, preset_path, output_format):
 
     start_time = time.time()
     current_step = 0
+    
+    # 统计输入文件数量（用于步骤进度报告）
+    input_file_count = 0
+    try:
+        if os.path.exists(input_to_use):
+            input_file_count = len([f for f in os.listdir(input_to_use) if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a', '.aac'))])
+    except:
+        pass
 
     for step in range(preset.total_steps):
         if current_step == 0:
@@ -149,6 +192,10 @@ def main(input_folder, store_dir, preset_path, output_format):
         output_to_storage = data["output_to_storage"]
 
         logger.info(f"\033[33mStep {current_step + 1}: Running inference using {model_name}\033[0m")
+        
+        # 步骤开始前，标记该步骤开始处理（processed = 0）
+        if preset.total_steps > 1:
+            update_step_progress(input_folder, current_step + 1, 0)
 
         if model_type == "UVR_VR_Models":
             primary_stem, secondary_stem, _, _= get_vr_model(model_name)
@@ -175,6 +222,18 @@ def main(input_folder, store_dir, preset_path, output_format):
             if result[0] == 0:
                 logger.error(f"Failed to run MSST model {model_name}, error: {result[1]}")
                 return
+        
+        # 步骤完成后，更新该步骤的进度（processed = total）
+        if preset.total_steps > 1:
+            # 统计输出目录中的文件数量作为已处理数量
+            processed_count = 0
+            try:
+                if os.path.exists(tmp_store_dir):
+                    processed_count = len([f for f in os.listdir(tmp_store_dir) if f.lower().endswith(('.wav', '.flac', '.mp3'))])
+            except:
+                processed_count = input_file_count  # 如果无法统计，使用输入文件数
+            update_step_progress(input_folder, current_step + 1, processed_count)
+        
         current_step += 1
 
     if os.path.exists(TEMP_PATH):

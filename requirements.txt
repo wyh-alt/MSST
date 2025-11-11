@@ -1,0 +1,63 @@
+# MSST WebUI 依赖包
+# 核心依赖
+torch>=1.9.0
+torchaudio>=0.9.0
+numpy>=1.19.0
+librosa>=0.8.0
+soundfile>=0.10.0
+gradio>=3.0.0
+pandas>=1.3.0
+tqdm>=4.60.0
+scipy>=1.7.0
+
+# 音频处理
+pydub>=0.25.0
+audioread>=2.1.0
+auraloss>=0.2.0
+
+# 机器学习
+scikit-learn>=1.0.0
+transformers>=4.20.0
+diffusers>=0.10.0
+
+# 训练相关
+accelerate>=0.20.0
+bitsandbytes>=0.39.0
+prodigyopt>=1.0.0
+wandb>=0.12.0
+tensorboard>=2.8.0
+tensorboardX>=2.5.0
+
+# 工具库
+omegaconf>=2.1.0
+hydra-core>=1.1.0
+pyyaml>=6.0
+requests>=2.25.0
+pillow>=8.0.0
+opencv-python>=4.5.0
+ffmpeg-python>=0.2.0
+psutil>=5.8.0
+GPUtil>=1.4.0
+
+# 音频增强
+numba>=0.56.0
+resampy>=0.3.0
+samplerate>=0.1.0
+webrtcvad>=2.0.0
+pyrubberband>=0.1.0
+pyloudnorm>=0.1.0
+madmom>=0.16.0
+essentia>=2.1.0
+
+# 其他工具
+opencc>=1.1.0
+xformers>=0.0.16
+einops>=0.4.0
+matplotlib>=3.3.0
+seaborn>=0.11.0
+
+# 网络和HTTP
+urllib3>=1.26.0
+certifi>=2021.0.0
+charset-normalizer>=2.0.0
+idna>=3.0.0

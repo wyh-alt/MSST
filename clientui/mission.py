@@ -157,8 +157,8 @@ class Manager:
             mission_dir = os.path.dirname(mission.output_file)
             mission.mission_dir = mission_dir
             
-            # 初始化进度追踪
-            task_progress.init_progress(mission.mission_dir, mission.input_dir)
+            # 初始化进度追踪，传入预设名称以支持多步骤进度
+            task_progress.init_progress(mission.mission_dir, mission.input_dir, mission.preset_name)
         
         # 检查输入目录是否直接包含音频文件
         has_audio_files = False
@@ -361,21 +361,30 @@ class Manager:
                     except Exception as e:
                         print(f"更新mission.json状态时出错: {e}")
             
-            # 只有当进程结束且处理了全部文件时，才标记任务完成
+            # 只有当进程结束时，才标记任务完成并从队列移除
             if process_ended:
-                if is_batch_task and processed_files < expected_file_count:
-                    # 如果是批量任务但未全部完成，保持running状态
-                    mission.state = 'running'
-                    mission.update_progress(status='running', processed_files=processed_files, total_files=expected_file_count)
-                    mission.write()
-                    # 不从队列中移除，等待后续处理
+                # 进程已结束，信任进程的退出状态
+                # 如果 exit_code 为 0，说明正常完成；否则说明异常退出
+                if mission.executor and mission.executor.process:
+                    exit_code = mission.executor.process.poll()
                 else:
-                    # 单文件任务或已完成所有文件处理
+                    exit_code = 0
+                
+                if exit_code == 0:
+                    # 正常完成
+                    print(f"调试信息 - 任务正常完成: 已处理 {processed_songs}/{expected_file_count} 首歌曲")
                     mission.state = 'completed'
-                    mission.update_progress(status='completed')
-                    mission.running = False
-                    mission.write()
-                    self.running.remove(mission)
+                    mission.update_progress(status='completed', processed_files=processed_songs, total_files=expected_file_count)
+                else:
+                    # 异常退出
+                    print(f"调试信息 - 任务异常退出: exit_code={exit_code}, 已处理 {processed_songs}/{expected_file_count} 首歌曲")
+                    mission.state = 'failed'
+                    mission.update_progress(status='failed', processed_files=processed_songs, total_files=expected_file_count)
+                
+                mission.running = False
+                mission.write()
+                self.running.remove(mission)
+                print(f"调试信息 - 任务已从运行队列移除: {mission.input_dir}")
 
         # 多线程处理逻辑 - 启动尽可能多的任务
         goon = True

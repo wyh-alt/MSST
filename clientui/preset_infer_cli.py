@@ -8,21 +8,13 @@ import argparse
 import time
 import shutil
 import json
+import threading
 from pathlib import Path
 from webui.preset import Presets
 from webui.utils import load_configs, get_vr_model, get_msst_model
 from webui.setup import setup_webui, set_debug
 from utils.constant import *
 from utils.logger import get_logger
-
-def get_cache_dir():
-    """获取缓存目录"""
-    try:
-        with open('client_config.json', 'r', encoding='utf-8') as f:
-            config = json.load(f)
-        return config.get('cache_dir', 'E:/MSSTcache/')
-    except (FileNotFoundError, json.JSONDecodeError):
-        return "E:/MSSTcache/"  # 默认目录
 
 # 导入任务进度追踪
 try:
@@ -64,6 +56,40 @@ def update_progress(input_folder, processed_count):
         print(f"更新进度时出错: {e}")
 
 
+def update_step_progress(input_folder, step_index, processed_count):
+    """
+    更新步骤处理进度
+    """
+    if not task_progress:
+        return
+        
+    # 尝试查找任务目录
+    try:
+        # 查找包含mission.json或mission_*.json的父目录
+        current_dir = Path(input_folder)
+        mission_dir = None
+        
+        # 向上查找任务目录（最多3层）
+        for _ in range(3):
+            if not current_dir or current_dir == current_dir.parent:
+                break
+            
+            # 检查当前目录是否有mission.json
+            mission_files = list(current_dir.glob('mission*.json'))
+            if mission_files:
+                mission_dir = str(current_dir)
+                break
+            
+            current_dir = current_dir.parent
+        
+        if mission_dir:
+            # 更新步骤进度
+            task_progress.update_step_progress(mission_dir, step_index, processed_count)
+            print(f"调试信息 - 更新步骤 {step_index} 进度: {processed_count}")
+    except Exception as e:
+        print(f"更新步骤进度时出错: {e}")
+
+
 def main(input_folder, store_dir, preset_path, output_format, skip_existing_files=False):
     print(f"调试信息 - preset_infer_cli.main: 开始执行")
     print(f"调试信息 - 输入文件夹: {input_folder}")
@@ -71,6 +97,34 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
     print(f"调试信息 - 预设路径: {preset_path}")
     print(f"调试信息 - 输出格式: {output_format}")
     print(f"调试信息 - 跳过已有文件: {skip_existing_files}")
+    
+    # 在开始时就确定任务目录，避免后续查找问题
+    mission_dir_for_progress = None
+    try:
+        current_dir = Path(input_folder)
+        print(f"调试信息 - 开始查找任务目录，从: {current_dir}")
+        # 向上查找任务目录（最多5层）
+        for i in range(5):
+            if not current_dir or current_dir == current_dir.parent:
+                print(f"调试信息 - 已到达根目录")
+                break
+            mission_files = list(current_dir.glob('mission*.json'))
+            print(f"调试信息 - 检查目录 {current_dir}: 找到 {len(mission_files)} 个 mission 文件")
+            if mission_files:
+                mission_dir_for_progress = str(current_dir)
+                print(f"调试信息 - 找到任务目录: {mission_dir_for_progress}")
+                break
+            current_dir = current_dir.parent
+        
+        if not mission_dir_for_progress:
+            print(f"调试信息 - 未找到任务目录！")
+    except Exception as e:
+        print(f"调试信息 - 查找任务目录时出错: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print(f"调试信息 - task_progress 是否可用: {task_progress is not None}")
+    print(f"调试信息 - mission_dir_for_progress: {mission_dir_for_progress}")
     
     # 检查输入路径
     try:
@@ -155,7 +209,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         print(f"调试信息 - 创建临时目录，只处理缺失的文件")
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
         
         print(f"调试信息 - 临时路径: {TEMP_PATH}")
         
@@ -181,7 +235,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         input_to_use = input_folder
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
         
         print(f"调试信息 - 临时路径: {TEMP_PATH}")
         
@@ -197,12 +251,22 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
     logger.info(f"Starting preset inference process, use presets: {preset_path}")
     logger.debug(f"presets: {preset.presets}")
     logger.debug(f"total_steps: {preset.total_steps}, store_dir: {store_dir}, output_format: {output_format}")
+    print(f"调试信息 - 预设总步骤数: {preset.total_steps}")
 
     if not preset.is_exist_models()[0]:
         logger.error(f"Model {preset.is_exist_models()[1]} not found")
 
     start_time = time.time()
     current_step = 0
+    
+    # 统计输入文件数量（用于步骤进度报告）
+    input_file_count = 0
+    try:
+        if os.path.exists(input_to_use):
+            input_file_count = len([f for f in os.listdir(input_to_use) if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a', '.aac'))])
+    except:
+        pass
+    print(f"调试信息 - 输入文件数量: {input_file_count}")
 
     for step in range(preset.total_steps):
         if current_step == 0:
@@ -229,16 +293,40 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
 
         logger.info(f"\033[33mStep {current_step + 1}: Running inference using {model_name}\033[0m")
         
-        # 统计已处理的文件数量
-        processed_files = 0
-        try:
-            if os.path.exists(direct_output):
-                for root, _, files in os.walk(direct_output):
-                    processed_files += sum(1 for f in files if f.lower().endswith(('.wav', '.flac', '.mp3')))
-            # 更新进度
-            update_progress(input_folder, processed_files)
-        except Exception as e:
-            logger.error(f"统计处理文件数量时出错: {e}")
+        # 步骤开始前，标记该步骤开始处理（processed = 0）
+        if preset.total_steps > 1 and mission_dir_for_progress and task_progress:
+            try:
+                task_progress.update_step_progress(mission_dir_for_progress, current_step + 1, 0)
+            except Exception as e:
+                print(f"更新步骤开始进度时出错: {e}")
+        
+        # 启动进度监控线程，在推理过程中实时更新步骤进度
+        progress_monitor_stop = threading.Event()
+        progress_monitor_thread = None
+        
+        if preset.total_steps > 1 and mission_dir_for_progress and task_progress:
+            def monitor_progress():
+                """后台监控线程，定期检查输出目录文件数并更新进度"""
+                last_count = 0
+                while not progress_monitor_stop.is_set():
+                    try:
+                        current_count = 0
+                        if os.path.exists(tmp_store_dir):
+                            current_count = len([f for f in os.listdir(tmp_store_dir) 
+                                               if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))])
+                        
+                        # 只在文件数量变化时更新
+                        if current_count != last_count:
+                            task_progress.update_step_progress(mission_dir_for_progress, current_step + 1, current_count)
+                            last_count = current_count
+                    except Exception:
+                        pass  # 忽略监控过程中的错误
+                    
+                    # 每秒检查一次
+                    progress_monitor_stop.wait(1)
+            
+            progress_monitor_thread = threading.Thread(target=monitor_progress, daemon=True)
+            progress_monitor_thread.start()
 
         if model_type == "UVR_VR_Models":
             primary_stem, secondary_stem, _, _ = get_vr_model(model_name)
@@ -251,6 +339,10 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
             result = preset.vr_infer(model_name, input_to_use, storage, output_format, skip_existing_files)
             if result[0] == 0:
                 logger.error(f"Failed to run VR model {model_name}, error: {result[1]}")
+                # 停止监控线程
+                if progress_monitor_thread:
+                    progress_monitor_stop.set()
+                    progress_monitor_thread.join(timeout=2)
                 return
         else:
             model_path, config_path, msst_model_type, _ = get_msst_model(model_name)
@@ -264,7 +356,33 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
             result = preset.msst_infer(msst_model_type, config_path, model_path, input_to_use, storage, output_format, skip_existing_files)
             if result[0] == 0:
                 logger.error(f"Failed to run MSST model {model_name}, error: {result[1]}")
+                # 停止监控线程
+                if progress_monitor_thread:
+                    progress_monitor_stop.set()
+                    progress_monitor_thread.join(timeout=2)
                 return
+        
+        # 停止监控线程
+        if progress_monitor_thread:
+            progress_monitor_stop.set()
+            progress_monitor_thread.join(timeout=2)
+        
+        # 步骤完成后，做最终的进度更新
+        if preset.total_steps > 1 and mission_dir_for_progress and task_progress:
+            # 统计输出目录中的文件数量作为已处理数量
+            processed_count = 0
+            try:
+                if os.path.exists(tmp_store_dir):
+                    processed_count = len([f for f in os.listdir(tmp_store_dir) 
+                                         if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))])
+            except Exception as e:
+                processed_count = input_file_count  # 如果无法统计，使用输入文件数
+            
+            try:
+                task_progress.update_step_progress(mission_dir_for_progress, current_step + 1, processed_count)
+            except Exception as e:
+                print(f"更新步骤完成进度时出错: {e}")
+        
         current_step += 1
 
     if os.path.exists(TEMP_PATH):
@@ -339,7 +457,7 @@ def main_batch(input_folders, store_dir, preset_path, output_format, skip_existi
     # 使用全局缓存目录，为每个批量任务创建唯一的临时目录
     import uuid
     task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-    TEMP_PATH = os.path.join(get_cache_dir(), f"batch_task_{task_id}")
+    TEMP_PATH = os.path.join("E:/MSSTcache", f"batch_task_{task_id}")
     
     print(f"调试信息 - 批量任务临时路径: {TEMP_PATH}")
     
@@ -492,3 +610,7 @@ if __name__ == "__main__":
         # 单个处理模式
         input_dir = args.input_dir[0] if args.input_dir else "input"
         main(input_dir, args.output_dir, args.preset_path, args.output_format)
+
+
+
+

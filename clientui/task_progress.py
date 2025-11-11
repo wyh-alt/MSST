@@ -9,13 +9,20 @@ class TaskProgress:
         self._lock = threading.Lock()
         self._progress_cache = {}  # 缓存任务进度，避免频繁读取文件
         self._last_update = {}     # 记录上次更新时间，避免过于频繁的文件访问
+        self._verifying = set()    # 正在验证的任务目录集合，防止递归调用
     
     def get_progress_file_path(self, mission_dir):
         """获取进度文件路径"""
         return os.path.join(mission_dir, 'progress.json')
     
-    def init_progress(self, mission_dir, input_dir):
-        """初始化任务进度文件"""
+    def init_progress(self, mission_dir, input_dir, preset_name=None):
+        """初始化任务进度文件
+        
+        Args:
+            mission_dir: 任务目录
+            input_dir: 输入目录
+            preset_name: 预设名称（可选），用于初始化步骤进度
+        """
         try:
             # 初始化时先使用基本的文件统计
             total_files = 0
@@ -59,6 +66,14 @@ class TaskProgress:
                 'details': [],  # 可以存储每个文件的处理状态
                 'total_files_locked': False  # 允许后续更新总数
             }
+            
+            # 如果提供了预设名称，初始化步骤进度
+            if preset_name:
+                step_progress = self._init_step_progress(preset_name, total_files)
+                if step_progress:
+                    progress_data['step_progress'] = step_progress
+                    progress_data['total_steps'] = len(step_progress)
+                    print(f"调试信息 - 初始化步骤进度: {len(step_progress)} 个步骤")
             
             # 保存到文件
             progress_file = self.get_progress_file_path(mission_dir)
@@ -132,14 +147,33 @@ class TaskProgress:
     def get_progress(self, mission_dir):
         """获取任务进度"""
         try:
-            # 检查缓存是否有效（30秒内的缓存有效，减少文件读取频率）
+            progress_file = self.get_progress_file_path(mission_dir)
+            
+            # 检查缓存是否有效
+            # 1. 缓存必须在30秒内
+            # 2. 文件修改时间不能比缓存更新（防止其他进程修改了文件）
             current_time = time.time()
+            cache_valid = False
             with self._lock:
                 if mission_dir in self._progress_cache and current_time - self._last_update.get(mission_dir, 0) < 30:
-                    return self._progress_cache[mission_dir]
+                    # 检查文件是否被修改
+                    if os.path.exists(progress_file):
+                        try:
+                            file_mtime = os.path.getmtime(progress_file)
+                            cache_time = self._last_update.get(mission_dir, 0)
+                            # 如果文件修改时间比缓存时间晚，说明文件被其他进程更新了，需要重新读取
+                            if file_mtime <= cache_time:
+                                cache_valid = True
+                        except:
+                            pass
+                    else:
+                        # 文件不存在，使用缓存
+                        cache_valid = True
+            
+            if cache_valid:
+                return self._progress_cache[mission_dir]
             
             # 从文件读取
-            progress_file = self.get_progress_file_path(mission_dir)
             if os.path.exists(progress_file):
                 try:
                     with open(progress_file, 'r', encoding='utf-8') as f:
@@ -154,7 +188,12 @@ class TaskProgress:
                     return None
                 
                 # 检查状态是否需要更新 - 如果有输出文件但状态仍为running
-                self._verify_status(mission_dir, progress_data)
+                # 只有在不在验证过程中时才调用，防止递归
+                with self._lock:
+                    should_verify = mission_dir not in self._verifying
+                
+                if should_verify:
+                    self._verify_status(mission_dir, progress_data)
                     
                 # 更新缓存
                 with self._lock:
@@ -170,7 +209,15 @@ class TaskProgress:
             
     def _verify_status(self, mission_dir, progress_data):
         """验证任务状态的正确性"""
+        # 防止递归调用：如果正在验证此任务，直接返回
+        with self._lock:
+            if mission_dir in self._verifying:
+                return
+            self._verifying.add(mission_dir)
+        
         try:
+            # 注意：此方法中不再调用 update_progress，而是直接修改 progress_data 并调用 _save_progress_directly
+            # 这样可以避免递归调用：update_progress -> get_progress -> _verify_status -> update_progress
             # 如果状态为running，但任务目录中有mission.json标记为completed，则更新状态
             if progress_data.get('status') == 'running':
                 mission_json = os.path.join(mission_dir, 'mission.json')
@@ -180,7 +227,8 @@ class TaskProgress:
                             mission_data = json.load(f)
                             if mission_data.get('state') == 'completed':
                                 progress_data['status'] = 'completed'
-                                self.update_progress(mission_dir, {'status': 'completed'})
+                                # 直接更新文件，避免调用 update_progress 导致递归
+                                self._save_progress_directly(mission_dir, progress_data)
                     except:
                         pass
                         
@@ -263,7 +311,9 @@ class TaskProgress:
                                 # 只在还没有结束时间时才添加结束时间
                                 if not progress_data.get('end_time', 0):
                                     update_data['end_time'] = progress_data['end_time']
-                                self.update_progress(mission_dir, update_data)
+                                # 直接更新数据并保存，避免调用 update_progress 导致递归
+                                progress_data.update(update_data)
+                                self._save_progress_directly(mission_dir, progress_data)
                             else:
                                 # 否则确保状态为running
                                 progress_data['status'] = 'running'
@@ -275,10 +325,100 @@ class TaskProgress:
                                 # 只在总数未锁定时更新总数
                                 if not is_locked or current_total <= 0:
                                     update_data['total_files'] = total_songs
-                                self.update_progress(mission_dir, update_data)
+                                # 直接更新数据并保存，避免调用 update_progress 导致递归
+                                progress_data.update(update_data)
+                                self._save_progress_directly(mission_dir, progress_data)
         except Exception as e:
             print(f"验证任务状态时出错: {e}")
+        finally:
+            # 移除验证标志
+            with self._lock:
+                self._verifying.discard(mission_dir)
             
+    def _save_progress_directly(self, mission_dir, progress_data):
+        """直接保存进度数据到文件，不触发验证，避免递归"""
+        try:
+            progress_data['last_update'] = time.time()
+            progress_file = self.get_progress_file_path(mission_dir)
+            with open(progress_file, 'w', encoding='utf-8') as f:
+                json.dump(progress_data, f, indent=4, ensure_ascii=False)
+            
+            # 更新缓存
+            with self._lock:
+                self._progress_cache[mission_dir] = progress_data
+                self._last_update[mission_dir] = time.time()
+        except Exception as e:
+            print(f"直接保存进度数据时出错: {e}")
+    
+    def _init_step_progress(self, preset_name, total_files):
+        """初始化步骤进度
+        
+        Args:
+            preset_name: 预设名称
+            total_files: 总文件数
+            
+        Returns:
+            dict: 步骤进度字典，格式为 {'step1': {'name': '模型名', 'processed': 0, 'total': total_files}, ...}
+        """
+        try:
+            preset_path = os.path.join('presets', preset_name)
+            if not os.path.exists(preset_path):
+                return None
+            
+            with open(preset_path, 'r', encoding='utf-8') as f:
+                preset_data = json.load(f)
+            
+            flow = preset_data.get('flow', preset_data.get('steps', []))
+            if not flow or len(flow) <= 1:
+                # 单步骤或无步骤，不需要步骤进度
+                return None
+            
+            step_progress = {}
+            for i, step in enumerate(flow, 1):
+                step_key = f'step{i}'
+                model_name = step.get('model_name', f'步骤 {i}')
+                step_progress[step_key] = {
+                    'name': model_name,
+                    'processed': 0,
+                    'total': total_files
+                }
+            
+            return step_progress
+        except Exception as e:
+            print(f"初始化步骤进度时出错: {e}")
+            return None
+    
+    def update_step_progress(self, mission_dir, step_index, processed_files):
+        """更新单个步骤的进度
+        
+        Args:
+            mission_dir: 任务目录
+            step_index: 步骤索引（从1开始）
+            processed_files: 已处理文件数
+        """
+        try:
+            current_progress = self.get_progress(mission_dir)
+            if not current_progress:
+                return False
+            
+            step_progress = current_progress.get('step_progress', {})
+            if not step_progress:
+                return False
+            
+            step_key = f'step{step_index}'
+            if step_key in step_progress:
+                step_progress[step_key]['processed'] = processed_files
+                
+                # 直接保存，避免递归
+                current_progress['step_progress'] = step_progress
+                self._save_progress_directly(mission_dir, current_progress)
+                return True
+            
+            return False
+        except Exception as e:
+            print(f"更新步骤进度时出错: {e}")
+            return False
+    
     def _get_outputs_per_song(self, mission_dir):
         """获取每首歌生成的输出文件数量"""
         try:
@@ -295,9 +435,6 @@ class TaskProgress:
                             try:
                                 with open(preset_path, 'r', encoding='utf-8') as f:
                                     preset_data = json.load(f)
-                            except (json.JSONDecodeError, RecursionError) as e:
-                                print(f"预设文件损坏或格式错误: {preset_path}, 错误: {e}")
-                                return 1  # 返回默认值
                                 
                                 # 检查是否有steps字段（新格式）
                                 steps = preset_data.get('steps', [])
@@ -318,6 +455,9 @@ class TaskProgress:
                                 # print(f"调试信息 - 预设 {preset_name}: 每首歌输出 {total_outputs} 个文件")  # 注释掉调试信息
                                 # 返回每首歌的输出文件数，至少为1
                                 return max(1, total_outputs)
+                            except (json.JSONDecodeError, RecursionError) as e:
+                                print(f"预设文件损坏或格式错误: {preset_path}, 错误: {e}")
+                                return 1  # 返回默认值
         except Exception as e:
             print(f"获取每首歌输出文件数时出错: {e}")
             

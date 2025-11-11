@@ -1,7 +1,7 @@
 {
     "version": "1.7.0 v2",
     "inference": {
-        "model_type": "multi_stem_models",
+        "model_type": "vocal_models",
         "selected_model": null,
         "input_dir": "C:/Users/wyh_a/AppData/Local/Temp/tmpfa3_rh4l/input",
         "store_dir": "C:/Users/wyh_a/AppData/Local/Temp/tmpfa3_rh4l/output",

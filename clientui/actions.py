@@ -11,26 +11,8 @@ from clientui.mission import Mission, manager, write_thread_count
 from clientui.task_progress import task_progress
 import zipfile
 
-# 从配置文件加载用户目录设置
-def get_client_dir():
-    """获取客户端用户目录"""
-    try:
-        with open('client_config.json', 'r', encoding='utf-8') as f:
-            config = json.load(f)
-        return Path(config.get('user_dir', 'E:/MSSTuser'))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return Path('E:/MSSTuser')  # 默认目录
+client_dir = Path('E:/MSSTuser')
 
-client_dir = get_client_dir()
-
-def get_cache_dir():
-    """获取缓存目录"""
-    try:
-        with open('client_config.json', 'r', encoding='utf-8') as f:
-            config = json.load(f)
-        return config.get('cache_dir', 'E:/MSSTcache/')
-    except (FileNotFoundError, json.JSONDecodeError):
-        return "E:/MSSTcache/"  # 默认目录
 
 def switch2user_tab(req: gr.Request):
     from client import is_admin
@@ -82,7 +64,7 @@ def delete_user(req: gr.Request, username):
 
 
 def clear_cache():
-    cache_dir = os.path.abspath(get_cache_dir())
+    cache_dir = os.path.abspath("E:/MSSTcache/")
     shutil.rmtree(cache_dir, ignore_errors=True)
     gr.Info('清空缓存成功')
 
@@ -196,7 +178,7 @@ def delete_mission(req: gr.Request, mission):
     
     # 清理缓存文件
     try:
-        cache_dir = get_cache_dir()
+        cache_dir = "E:/MSSTcache"
         if os.path.exists(cache_dir):
             # 为避免误删正在使用的临时目录，这里不再删除 preset_task_* 目录
             # 这些目录会在任务结束时自行清理，或通过“清空缓存”功能统一处理
@@ -303,14 +285,21 @@ def select_mission(req: gr.Request, mission):
     # 如果进度信息不存在或已过期，则根据输出文件推断状态
     if not progress_info:
         # 简化处理：直接使用输出文件数作为进度，避免复杂计算
+        # 只更新必要的字段，不要覆盖 step_progress 等其他信息
         progress_info = {
             'processed_files': output_file_count,
             'total_files': max(1, output_file_count),
             'status': 'completed' if output_file_count > 0 else 'running'
         }
-        # 更新到文件
+        # 更新到文件（只更新这几个字段，不会影响 step_progress）
         if output_file_count > 0:
-            task_progress.update_progress(str(mission_dir), progress_info)
+            task_progress.update_progress(str(mission_dir), {
+                'processed_files': output_file_count,
+                'total_files': max(1, output_file_count),
+                'status': 'completed' if output_file_count > 0 else 'running'
+            })
+            # 重新读取完整的进度信息，包括 step_progress
+            progress_info = task_progress.get_progress(str(mission_dir)) or progress_info
     
     # 检查任务是否正在运行
     is_running_now = False
@@ -458,6 +447,21 @@ def select_mission(req: gr.Request, mission):
         pass
     state += f'总任务状态: {status}\n'
     state += f'进度: {processed}/{total}\n'
+    
+    # 如果有步骤进度信息，显示分步骤进度
+    step_progress = progress_info.get('step_progress', {})
+    total_steps = progress_info.get('total_steps', 0)
+    if step_progress and total_steps > 1:
+        state += f'分步骤进度:\n'
+        for i in range(1, total_steps + 1):
+            step_key = f'step{i}'
+            if step_key in step_progress:
+                step_info = step_progress[step_key]
+                step_name = step_info.get('name', f'步骤{i}')
+                step_processed = step_info.get('processed', 0)
+                step_total = step_info.get('total', 0)
+                state += f'  {step_name}: {step_processed}/{step_total}\n'
+    
     # 只在任务完成时显示处理耗时
     if status == 'completed':
         state += f'处理耗时: {processing_duration_text}\n'
@@ -598,7 +602,15 @@ def infer(req: gr.Request,
             return gr.Warning('请上传音频文件')
         
         timestamp = time.time()
-        mission_name = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d_%H-%M-%S')
+        time_str = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d_%H-%M-%S')
+        
+        # 从预设路径提取预设简称
+        preset_simple_name = Path(preset_name).stem if preset_name else "unknown"
+        # 清理预设名称，移除特殊字符
+        preset_simple_name = preset_simple_name.replace('（', '_').replace('）', '').replace('(', '_').replace(')', '')
+        preset_simple_name = preset_simple_name.replace('、', '_').replace('，', '_').replace(',', '_')
+        
+        mission_name = f"{time_str}_{preset_simple_name}"
         mission_dir = client_dir / req.username / mission_name
         mission_dir.mkdir(parents=True, exist_ok=True)
 
@@ -705,7 +717,15 @@ def infer(req: gr.Request,
             return gr.Warning(f'路径处理时出错: {str(e)}\n请检查路径格式是否正确')
         
         timestamp = time.time()
-        mission_name = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d_%H-%M-%S')
+        time_str = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d_%H-%M-%S')
+        
+        # 从预设路径提取预设简称
+        preset_simple_name = Path(preset_name).stem if preset_name else "unknown"
+        # 清理预设名称，移除特殊字符
+        preset_simple_name = preset_simple_name.replace('（', '_').replace('）', '').replace('(', '_').replace(')', '')
+        preset_simple_name = preset_simple_name.replace('、', '_').replace('，', '_').replace(',', '_')
+        
+        mission_name = f"{time_str}_{preset_simple_name}"
         mission_dir = client_dir / req.username / mission_name
         mission_dir.mkdir(parents=True, exist_ok=True)
 
