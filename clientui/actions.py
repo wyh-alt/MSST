@@ -157,6 +157,14 @@ def delete_mission(req: gr.Request, mission):
                 except Exception as e:
                     print(f"终止任务进程时出错: {e}")
             
+            # 更新任务状态
+            running_mission.running = False
+            running_mission.state = 'terminated'
+            try:
+                running_mission.write()
+            except:
+                pass  # 如果任务目录已删除，写入可能失败
+            
             # 从running列表中移除
             manager.running.remove(running_mission)
             mission_terminated = True
@@ -212,6 +220,25 @@ def delete_mission(req: gr.Request, mission):
                 print("已清理MPS缓存")
         except Exception as e:
             print(f"清理GPU缓存时出错: {e}")
+    
+    # 清理输出目录中的 .mission_dir 标记文件（路径方式）
+    try:
+        # 从 mission.json 读取输出目录
+        mission_json = mission_dir / 'mission.json'
+        if mission_json.exists():
+            with open(mission_json, 'r', encoding='utf-8') as f:
+                mission_data = json.load(f)
+            output_dir = mission_data.get('output_dir', '')
+            if output_dir and os.path.exists(output_dir):
+                marker_file = os.path.join(output_dir, '.mission_dir')
+                if os.path.exists(marker_file):
+                    try:
+                        os.remove(marker_file)
+                        print(f"已清理任务目录标记文件: {marker_file}")
+                    except Exception as e:
+                        print(f"清理标记文件时出错: {e}")
+    except Exception as e:
+        print(f"清理标记文件时出错: {e}")
     
     # 删除任务目录
     shutil.rmtree(mission_dir, ignore_errors=True)
@@ -738,7 +765,18 @@ def infer(req: gr.Request,
         mission.skip_existing_files = skip_existing_files
         mission.state = 'waiting'
         mission.output_file = mission_json
+        mission.mission_dir = str(mission_dir)  # 设置任务目录
         mission.write()
+        
+        # 在输出目录中创建 mission_dir 标记文件，方便 preset_infer_cli.py 查找
+        try:
+            marker_file = os.path.join(output_path, '.mission_dir')
+            with open(marker_file, 'w', encoding='utf-8') as f:
+                f.write(str(mission_dir))
+            print(f"调试信息 - 在输出目录创建任务目录标记: {marker_file}")
+        except Exception as e:
+            print(f"调试信息 - 创建任务目录标记失败: {e}")
+        
         manager.add(mission)
 
         gr.Info(f'添加任务成功，将处理 {len(audio_files)} 个音频文件')

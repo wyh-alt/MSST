@@ -101,30 +101,122 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
     # 在开始时就确定任务目录，避免后续查找问题
     mission_dir_for_progress = None
     try:
+        # 方法1: 从输入目录向上查找
         current_dir = Path(input_folder)
-        print(f"调试信息 - 开始查找任务目录，从: {current_dir}")
-        # 向上查找任务目录（最多5层）
-        for i in range(5):
+        print(f"调试信息 - 开始查找任务目录，从输入目录: {current_dir}")
+        # 向上查找任务目录（最多8层）
+        for i in range(8):
             if not current_dir or current_dir == current_dir.parent:
                 print(f"调试信息 - 已到达根目录")
                 break
+            # 查找 mission*.json 或 progress.json
             mission_files = list(current_dir.glob('mission*.json'))
-            print(f"调试信息 - 检查目录 {current_dir}: 找到 {len(mission_files)} 个 mission 文件")
-            if mission_files:
+            progress_files = list(current_dir.glob('progress.json'))
+            
+            if mission_files or progress_files:
                 mission_dir_for_progress = str(current_dir)
-                print(f"调试信息 - 找到任务目录: {mission_dir_for_progress}")
+                print(f"调试信息 - ✅ 找到任务目录: {mission_dir_for_progress}")
+                print(f"调试信息 - 找到文件: mission={len(mission_files)}, progress={len(progress_files)}")
                 break
+            
+            print(f"调试信息 - 检查目录 {current_dir}: 未找到任务文件")
             current_dir = current_dir.parent
         
+        # 方法2: 如果输入目录查找失败，尝试从输出目录查找
+        if not mission_dir_for_progress and store_dir:
+            print(f"调试信息 - 尝试从输出目录查找: {store_dir}")
+            current_dir = Path(store_dir)
+            for i in range(8):
+                if not current_dir or current_dir == current_dir.parent:
+                    break
+                mission_files = list(current_dir.glob('mission*.json'))
+                progress_files = list(current_dir.glob('progress.json'))
+                
+                if mission_files or progress_files:
+                    mission_dir_for_progress = str(current_dir)
+                    print(f"调试信息 - ✅ 从输出目录找到任务目录: {mission_dir_for_progress}")
+                    break
+                current_dir = current_dir.parent
+        
+        # 方法3: 检查输出目录中的 .mission_dir 标记文件（路径方式）
+        if not mission_dir_for_progress and store_dir:
+            marker_file = os.path.join(store_dir, '.mission_dir')
+            if os.path.exists(marker_file):
+                try:
+                    with open(marker_file, 'r', encoding='utf-8') as f:
+                        mission_dir_from_marker = f.read().strip()
+                    if os.path.exists(mission_dir_from_marker):
+                        mission_dir_for_progress = mission_dir_from_marker
+                        print(f"调试信息 - ✅ 从标记文件找到任务目录: {mission_dir_for_progress}")
+                except Exception as e:
+                    print(f"调试信息 - 读取标记文件时出错: {e}")
+        
+        # 方法4: 如果还是找不到，尝试在输出目录创建进度文件（路径方式）
+        if not mission_dir_for_progress and store_dir:
+            print(f"调试信息 - 未找到任务目录，尝试在输出目录创建进度文件（路径方式）")
+            try:
+                # 检查输出目录是否可写
+                test_file = os.path.join(store_dir, '.progress_test')
+                try:
+                    with open(test_file, 'w') as f:
+                        f.write('test')
+                    os.remove(test_file)
+                    # 可以写入，使用输出目录作为任务目录
+                    mission_dir_for_progress = store_dir
+                    print(f"调试信息 - ✅ 使用输出目录作为任务目录: {mission_dir_for_progress}")
+                except:
+                    print(f"调试信息 - ⚠️  输出目录不可写，无法创建进度文件")
+            except Exception as e:
+                print(f"调试信息 - 检查输出目录时出错: {e}")
+        
         if not mission_dir_for_progress:
-            print(f"调试信息 - 未找到任务目录！")
+            print(f"调试信息 - ⚠️  未找到任务目录！分步骤进度将无法显示")
+            print(f"调试信息 - 提示: 请确保输入/输出目录是任务目录的子目录，或任务目录中存在 mission.json 或 progress.json 文件")
     except Exception as e:
-        print(f"调试信息 - 查找任务目录时出错: {e}")
+        print(f"调试信息 - ❌ 查找任务目录时出错: {e}")
         import traceback
         traceback.print_exc()
     
     print(f"调试信息 - task_progress 是否可用: {task_progress is not None}")
     print(f"调试信息 - mission_dir_for_progress: {mission_dir_for_progress}")
+    
+    # 如果找到了任务目录，尝试初始化或更新进度追踪
+    if mission_dir_for_progress and task_progress:
+        try:
+            # 提取预设文件名（不含路径）
+            preset_filename = os.path.basename(preset_path)
+            print(f"调试信息 - 预设文件名: {preset_filename}")
+            
+            # 检查进度文件是否存在
+            progress_file = os.path.join(mission_dir_for_progress, 'progress.json')
+            if not os.path.exists(progress_file):
+                print(f"调试信息 - progress.json 不存在，初始化进度追踪")
+                task_progress.init_progress(mission_dir_for_progress, input_folder, preset_filename)
+            else:
+                print(f"调试信息 - progress.json 已存在，检查是否需要更新")
+                # 确保步骤信息已初始化
+                progress_info = task_progress.get_progress(mission_dir_for_progress)
+                if not progress_info:
+                    print(f"调试信息 - 无法读取进度信息，重新初始化")
+                    task_progress.init_progress(mission_dir_for_progress, input_folder, preset_filename)
+                elif 'step_progress' not in progress_info or not progress_info.get('step_progress'):
+                    print(f"调试信息 - 步骤进度信息缺失，重新初始化")
+                    task_progress.init_progress(mission_dir_for_progress, input_folder, preset_filename)
+                else:
+                    step_keys = list(progress_info.get('step_progress', {}).keys())
+                    print(f"调试信息 - ✅ 步骤进度信息已存在: {step_keys}")
+                    # 验证步骤数量是否匹配
+                    expected_steps = preset.total_steps
+                    actual_steps = len(step_keys)
+                    if actual_steps != expected_steps:
+                        print(f"调试信息 - ⚠️  步骤数量不匹配: 预期 {expected_steps} 个，实际 {actual_steps} 个，重新初始化")
+                        task_progress.init_progress(mission_dir_for_progress, input_folder, preset_filename)
+                    else:
+                        print(f"调试信息 - ✅ 步骤数量匹配: {expected_steps} 个步骤")
+        except Exception as e:
+            print(f"调试信息 - ❌ 初始化进度追踪时出错: {e}")
+            import traceback
+            traceback.print_exc()
     
     # 检查输入路径
     try:
@@ -247,11 +339,27 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
     os.makedirs(tmp_store_dir, exist_ok=True)
 
     preset = Presets(preset_data, force_cpu=False, use_tta=False, logger=logger)
+    
+    # 在创建 preset 后，再次检查并初始化进度（因为现在可以获取 total_steps）
+    if mission_dir_for_progress and task_progress:
+        try:
+            preset_filename = os.path.basename(preset_path)
+            progress_info = task_progress.get_progress(mission_dir_for_progress)
+            if progress_info:
+                step_progress = progress_info.get('step_progress', {})
+                expected_steps = preset.total_steps
+                actual_steps = len(step_progress) if step_progress else 0
+                if actual_steps != expected_steps:
+                    print(f"调试信息 - ⚠️  步骤数量不匹配: 预期 {expected_steps} 个，实际 {actual_steps} 个，重新初始化")
+                    task_progress.init_progress(mission_dir_for_progress, input_folder, preset_filename)
+        except Exception as e:
+            print(f"调试信息 - 验证步骤数量时出错: {e}")
 
     logger.info(f"Starting preset inference process, use presets: {preset_path}")
     logger.debug(f"presets: {preset.presets}")
     logger.debug(f"total_steps: {preset.total_steps}, store_dir: {store_dir}, output_format: {output_format}")
     print(f"调试信息 - 预设总步骤数: {preset.total_steps}")
+    print(f"调试信息 - 预设详情: {preset.presets}")
 
     if not preset.is_exist_models()[0]:
         logger.error(f"Model {preset.is_exist_models()[1]} not found")
@@ -268,22 +376,35 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         pass
     print(f"调试信息 - 输入文件数量: {input_file_count}")
 
+    print(f"=== 开始多步骤处理循环，总步骤数: {preset.total_steps} ===")
     for step in range(preset.total_steps):
+        print(f"\n=== 循环迭代: step={step}, current_step={current_step} ===")
+        print(f"调试信息 - 步骤处理前: input_to_use={input_to_use}, tmp_store_dir={tmp_store_dir}")
+        
         if current_step == 0:
             # 第一步使用已经确定的input_to_use（可能是原始目录或临时目录）
+            print(f"调试信息 - 第一步，保持input_to_use和tmp_store_dir不变")
             pass
         if preset.total_steps - 1 > current_step > 0:
+            print(f"调试信息 - 中间步骤（current_step={current_step}），更新input和output目录")
+            print(f"调试信息 - 条件检查: {preset.total_steps - 1} > {current_step} > 0 = {preset.total_steps - 1 > current_step > 0}")
             if input_to_use != input_folder and input_to_use != os.path.join(TEMP_PATH, "temp_input"):
+                print(f"调试信息 - 删除上一步输入目录: {input_to_use}")
                 shutil.rmtree(input_to_use)
             input_to_use = tmp_store_dir
             tmp_store_dir = os.path.join(TEMP_PATH, f"step_{current_step + 1}_output")
+            print(f"调试信息 - 更新后: input_to_use={input_to_use}, tmp_store_dir={tmp_store_dir}")
         if preset.total_steps == 1:
             # 单步处理：保持原始输入，输出直接到最终目录
+            print(f"调试信息 - 单步处理模式")
             tmp_store_dir = store_dir
         elif current_step == preset.total_steps - 1:
             # 多步流程的最后一步：将上一步输出作为输入
+            print(f"调试信息 - 最后一步（current_step={current_step}），输出到最终目录")
+            print(f"调试信息 - 条件检查: {current_step} == {preset.total_steps - 1} = {current_step == preset.total_steps - 1}")
             input_to_use = tmp_store_dir
             tmp_store_dir = store_dir
+            print(f"调试信息 - 更新后: input_to_use={input_to_use}, tmp_store_dir={tmp_store_dir}")
 
         data = preset.get_step(step)
         model_type = data["model_type"]
@@ -291,14 +412,20 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         input_to_next = data["input_to_next"]
         output_to_storage = data["output_to_storage"]
 
+        print(f"调试信息 - 步骤详情: model_type={model_type}, model_name={model_name}")
+        print(f"调试信息 - input_to_next={input_to_next}, output_to_storage={output_to_storage}")
         logger.info(f"\033[33mStep {current_step + 1}: Running inference using {model_name}\033[0m")
         
         # 步骤开始前，标记该步骤开始处理（processed = 0）
         if preset.total_steps > 1 and mission_dir_for_progress and task_progress:
             try:
-                task_progress.update_step_progress(mission_dir_for_progress, current_step + 1, 0)
+                print(f"调试信息 - 更新步骤 {current_step + 1} 开始进度: processed=0")
+                result = task_progress.update_step_progress(mission_dir_for_progress, current_step + 1, 0)
+                print(f"调试信息 - 步骤开始进度更新结果: {result}")
             except Exception as e:
-                print(f"更新步骤开始进度时出错: {e}")
+                print(f"❌ 更新步骤开始进度时出错: {e}")
+                import traceback
+                traceback.print_exc()
         
         # 启动进度监控线程，在推理过程中实时更新步骤进度
         progress_monitor_stop = threading.Event()
@@ -308,23 +435,53 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
             def monitor_progress():
                 """后台监控线程，定期检查输出目录文件数并更新进度"""
                 last_count = 0
+                update_count = 0
+                check_count = 0
+                print(f"调试信息 - [监控线程] 步骤 {current_step + 1} 监控线程已启动")
+                print(f"调试信息 - [监控线程] 监控目录: {tmp_store_dir}")
+                print(f"调试信息 - [监控线程] 任务目录: {mission_dir_for_progress}")
+                
                 while not progress_monitor_stop.is_set():
                     try:
+                        check_count += 1
                         current_count = 0
                         if os.path.exists(tmp_store_dir):
-                            current_count = len([f for f in os.listdir(tmp_store_dir) 
-                                               if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))])
+                            files = [f for f in os.listdir(tmp_store_dir) 
+                                    if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))]
+                            current_count = len(files)
+                        else:
+                            # 目录不存在，可能是第一步刚开始
+                            if check_count % 10 == 0:  # 每10秒输出一次
+                                print(f"调试信息 - [监控线程] 步骤 {current_step + 1} 输出目录不存在: {tmp_store_dir}")
                         
                         # 只在文件数量变化时更新
                         if current_count != last_count:
-                            task_progress.update_step_progress(mission_dir_for_progress, current_step + 1, current_count)
-                            last_count = current_count
-                    except Exception:
-                        pass  # 忽略监控过程中的错误
+                            try:
+                                result = task_progress.update_step_progress(mission_dir_for_progress, current_step + 1, current_count)
+                                if result:
+                                    last_count = current_count
+                                    update_count += 1
+                                    if update_count <= 5 or update_count % 10 == 1:  # 前5次和每10次更新输出日志
+                                        print(f"调试信息 - [监控线程] ✅ 步骤 {current_step + 1} 进度更新: {current_count} 个文件 (更新次数: {update_count})")
+                                else:
+                                    if update_count == 0:  # 第一次更新失败时输出
+                                        print(f"调试信息 - [监控线程] ❌ 步骤 {current_step + 1} 进度更新失败: update_step_progress 返回 False")
+                            except Exception as e:
+                                print(f"调试信息 - [监控线程] ❌ 更新进度时出错: {e}")
+                                import traceback
+                                traceback.print_exc()
+                    except Exception as e:
+                        print(f"调试信息 - [监控线程] ❌ 监控过程中出错: {e}")
+                        import traceback
+                        traceback.print_exc()
                     
                     # 每秒检查一次
                     progress_monitor_stop.wait(1)
+                
+                print(f"调试信息 - [监控线程] 步骤 {current_step + 1} 监控线程已停止 (共检查 {check_count} 次, 更新 {update_count} 次)")
             
+            print(f"调试信息 - 🚀 启动步骤 {current_step + 1} 的进度监控线程")
+            print(f"调试信息 - 监控参数: mission_dir={mission_dir_for_progress}, tmp_store_dir={tmp_store_dir}")
             progress_monitor_thread = threading.Thread(target=monitor_progress, daemon=True)
             progress_monitor_thread.start()
 
@@ -336,14 +493,26 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
                 storage[stem].append(direct_output)
 
             logger.debug(f"input_to_next: {input_to_next}, output_to_storage: {output_to_storage}, storage: {storage}")
+            print(f"调试信息 - 开始执行VR推理: model={model_name}, input={input_to_use}, storage={storage}")
             result = preset.vr_infer(model_name, input_to_use, storage, output_format, skip_existing_files)
+            print(f"调试信息 - VR推理完成，返回结果: {result}")
             if result[0] == 0:
                 logger.error(f"Failed to run VR model {model_name}, error: {result[1]}")
+                print(f"调试信息 - VR推理失败，提前返回")
                 # 停止监控线程
                 if progress_monitor_thread:
                     progress_monitor_stop.set()
                     progress_monitor_thread.join(timeout=2)
                 return
+            elif result[0] == -1:
+                print(f"调试信息 - VR推理被用户终止，提前返回")
+                # 停止监控线程
+                if progress_monitor_thread:
+                    progress_monitor_stop.set()
+                    progress_monitor_thread.join(timeout=2)
+                return
+            else:
+                print(f"调试信息 - VR推理成功，继续下一步")
         else:
             model_path, config_path, msst_model_type, _ = get_msst_model(model_name)
             stems = load_configs(config_path).training.get("instruments", [])
@@ -353,14 +522,26 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
                 storage[stem].append(direct_output)
 
             logger.debug(f"input_to_next: {input_to_next}, output_to_storage: {output_to_storage}, storage: {storage}")
+            print(f"调试信息 - 开始执行MSST推理: model={model_name}, input={input_to_use}, storage={storage}")
             result = preset.msst_infer(msst_model_type, config_path, model_path, input_to_use, storage, output_format, skip_existing_files)
+            print(f"调试信息 - MSST推理完成，返回结果: {result}")
             if result[0] == 0:
                 logger.error(f"Failed to run MSST model {model_name}, error: {result[1]}")
+                print(f"调试信息 - MSST推理失败，提前返回")
                 # 停止监控线程
                 if progress_monitor_thread:
                     progress_monitor_stop.set()
                     progress_monitor_thread.join(timeout=2)
                 return
+            elif result[0] == -1:
+                print(f"调试信息 - MSST推理被用户终止，提前返回")
+                # 停止监控线程
+                if progress_monitor_thread:
+                    progress_monitor_stop.set()
+                    progress_monitor_thread.join(timeout=2)
+                return
+            else:
+                print(f"调试信息 - MSST推理成功，继续下一步")
         
         # 停止监控线程
         if progress_monitor_thread:
@@ -373,20 +554,58 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
             processed_count = 0
             try:
                 if os.path.exists(tmp_store_dir):
-                    processed_count = len([f for f in os.listdir(tmp_store_dir) 
-                                         if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))])
+                    files = [f for f in os.listdir(tmp_store_dir) 
+                            if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))]
+                    processed_count = len(files)
+                    print(f"调试信息 - 步骤 {current_step + 1} 输出目录包含 {processed_count} 个文件")
+                else:
+                    print(f"调试信息 - ⚠️  步骤 {current_step + 1} 输出目录不存在: {tmp_store_dir}")
             except Exception as e:
+                print(f"调试信息 - 统计输出文件失败: {e}")
                 processed_count = input_file_count  # 如果无法统计，使用输入文件数
             
             try:
-                task_progress.update_step_progress(mission_dir_for_progress, current_step + 1, processed_count)
+                print(f"调试信息 - 更新步骤 {current_step + 1} 最终进度: processed={processed_count}")
+                result = task_progress.update_step_progress(mission_dir_for_progress, current_step + 1, processed_count)
+                print(f"调试信息 - 步骤最终进度更新结果: {result}")
             except Exception as e:
-                print(f"更新步骤完成进度时出错: {e}")
+                print(f"❌ 更新步骤完成进度时出错: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # 检查输出目录文件情况
+        try:
+            if os.path.exists(tmp_store_dir):
+                output_files = [f for f in os.listdir(tmp_store_dir) 
+                              if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))]
+                print(f"调试信息 - 步骤 {current_step + 1} 完成，输出目录 {tmp_store_dir} 包含 {len(output_files)} 个文件")
+                if len(output_files) > 0:
+                    print(f"调试信息 - 前3个输出文件: {output_files[:3]}")
+            else:
+                print(f"调试信息 - 警告：输出目录 {tmp_store_dir} 不存在！")
+        except Exception as e:
+            print(f"调试信息 - 检查输出目录时出错: {e}")
         
         current_step += 1
+        print(f"调试信息 - 步骤 {step + 1} 完成，current_step 更新为 {current_step}")
+        print(f"=== 循环迭代 {step + 1} 结束 ===")
 
+    print(f"\n=== 所有步骤处理完成 ===")
+    print(f"调试信息 - 共完成 {current_step} 个步骤（预期 {preset.total_steps} 个步骤）")
+    
     if os.path.exists(TEMP_PATH):
+        print(f"调试信息 - 清理临时目录: {TEMP_PATH}")
         shutil.rmtree(TEMP_PATH)
+    
+    # 清理输出目录中的 .mission_dir 标记文件（路径方式）
+    if store_dir and os.path.exists(store_dir):
+        marker_file = os.path.join(store_dir, '.mission_dir')
+        if os.path.exists(marker_file):
+            try:
+                os.remove(marker_file)
+                print(f"调试信息 - ✅ 已清理任务目录标记文件: {marker_file}")
+            except Exception as e:
+                print(f"调试信息 - ⚠️  清理标记文件失败: {e}")
     
     # 统计最终处理的文件数量
     processed_files = 0
@@ -394,6 +613,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         if os.path.exists(store_dir):
             for root, _, files in os.walk(store_dir):
                 processed_files += sum(1 for f in files if f.lower().endswith(('.wav', '.flac', '.mp3')))
+            print(f"调试信息 - 最终输出目录 {store_dir} 包含 {processed_files} 个文件")
         # 更新最终进度
         update_progress(input_folder, processed_files)
     except Exception as e:

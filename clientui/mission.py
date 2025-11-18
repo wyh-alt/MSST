@@ -8,6 +8,11 @@ from pathlib import Path
 from clientui.class_command_executor import CommandExecutor
 from clientui.task_progress import task_progress
 
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 
 def read_thread_count():
     config_path = Path('./config.json').resolve()
@@ -242,11 +247,39 @@ class Manager:
         for mission in running:
             # 检查进程是否已结束
             process_ended = False
+            process_exists = False
+            
+            # 检查 executor 和 process 是否存在
             if mission.executor is not None and mission.executor.process is not None:
-                exit_code = mission.executor.process.poll()
-                if exit_code is not None:  # 进程已结束
+                try:
+                    exit_code = mission.executor.process.poll()
+                    if exit_code is not None:  # 进程已结束
+                        process_ended = True
+                        print(f"调试信息 - 任务进程已结束: {mission.input_dir}, exit_code={exit_code}")
+                    else:
+                        process_exists = True  # 进程还在运行
+                except (ProcessLookupError, OSError):
+                    # 进程不存在（可能被强制终止）
                     process_ended = True
-                    print(f"调试信息 - 任务进程已结束: {mission.input_dir}, exit_code={exit_code}")
+                    print(f"调试信息 - 任务进程不存在（可能已被终止）: {mission.input_dir}")
+                except Exception as e:
+                    # 其他异常，也认为进程已结束
+                    process_ended = True
+                    print(f"调试信息 - 检查进程状态时出错，标记为已结束: {mission.input_dir}, 错误: {e}")
+            else:
+                # executor 或 process 为 None，说明任务可能被强制删除
+                # 检查任务目录是否还存在，如果不存在，说明任务已被删除
+                if mission.mission_dir and not os.path.exists(mission.mission_dir):
+                    process_ended = True
+                    print(f"调试信息 - 任务目录不存在，任务可能已被删除: {mission.input_dir}")
+                elif mission.executor is None:
+                    # executor 为 None 但任务还在 running 列表中，可能是异常状态
+                    print(f"调试信息 - ⚠️  警告：任务 executor 为 None 但仍在运行列表: {mission.input_dir}")
+                    # 检查进程是否真的在运行（通过检查输出目录是否有新文件）
+                    if not process_exists:
+                        # 如果超过一定时间没有新文件产生，认为任务已停止
+                        process_ended = True
+                        print(f"调试信息 - 任务 executor 为 None，标记为已结束: {mission.input_dir}")
             
             # 检查是否为批量任务
             is_batch_task = False
@@ -324,18 +357,25 @@ class Manager:
             
             if output_files:
                 # 有输出文件，说明任务已经完成部分或全部
-                print(f"调试信息 - 检测到输出文件: {mission.output_dir}, 文件数: {len(output_files)}, 处理歌曲数: {processed_songs}")
+                print(f"调试信息 - 检测到输出文件: {mission.output_dir}, 文件数: {len(output_files)}, 处理歌曲数: {processed_songs}, 预期: {expected_file_count}")
+                
+                # 检查是否所有文件都已处理完成
+                all_files_processed = processed_songs >= expected_file_count
                 
                 # 更新进度信息
                 if mission.mission_dir:
                     status = 'running'
-                    # 只有当进程结束且所有歌曲处理完成时，才标记任务为完成
-                    if process_ended and (not is_batch_task or processed_songs >= expected_file_count):
+                    # 如果所有文件都已处理完成，即使进程还没结束，也标记为完成
+                    # 或者进程已结束且所有歌曲处理完成
+                    if all_files_processed or (process_ended and (not is_batch_task or processed_songs >= expected_file_count)):
                         status = 'completed'
                         # 记录任务结束时间
                         end_time = time.time()
+                        print(f"调试信息 - ✅ 任务已完成: 已处理 {processed_songs}/{expected_file_count} 首歌曲, process_ended={process_ended}, all_files_processed={all_files_processed}")
                     else:
                         end_time = None
+                        if not process_ended:
+                            print(f"调试信息 - ⏳ 任务进行中: 已处理 {processed_songs}/{expected_file_count} 首歌曲, 等待进程结束...")
                     
                     update_data = {
                         'processed_files': processed_songs,  # 使用歌曲数而不是文件数
@@ -361,35 +401,109 @@ class Manager:
                     except Exception as e:
                         print(f"更新mission.json状态时出错: {e}")
             
-            # 只有当进程结束时，才标记任务完成并从队列移除
-            if process_ended:
-                # 进程已结束，信任进程的退出状态
-                # 如果 exit_code 为 0，说明正常完成；否则说明异常退出
+            # 如果所有文件都已处理完成，即使进程还没结束，也结束任务
+            # 或者进程已结束时，结束任务
+            should_end_task = False
+            
+            # 检查是否所有文件都已处理完成
+            if processed_songs >= expected_file_count and expected_file_count > 0:
+                # 所有文件都已处理完成
+                should_end_task = True
+                print(f"调试信息 - ✅ 所有文件已处理完成 ({processed_songs}/{expected_file_count})，准备结束任务")
+            elif process_ended:
+                # 进程已结束
+                should_end_task = True
+                print(f"调试信息 - ✅ 进程已结束，准备结束任务")
+                # 如果进程结束但没有输出文件，也结束任务（可能是所有文件都被跳过）
+                if not output_files and expected_file_count > 0:
+                    print(f"调试信息 - ⚠️  进程已结束但没有输出文件，可能是所有文件都被跳过，结束任务")
+            
+            if should_end_task:
+                # 获取进程退出码
+                exit_code = 0
                 if mission.executor and mission.executor.process:
-                    exit_code = mission.executor.process.poll()
-                else:
-                    exit_code = 0
+                    try:
+                        exit_code = mission.executor.process.poll()
+                        if exit_code is None:
+                            # 进程还在运行，但所有文件已处理完成，强制结束
+                            print(f"调试信息 - ⚠️  进程还在运行，但所有文件已处理完成，强制结束任务")
+                            exit_code = 0  # 视为正常完成
+                    except:
+                        exit_code = 0
                 
-                if exit_code == 0:
-                    # 正常完成
-                    print(f"调试信息 - 任务正常完成: 已处理 {processed_songs}/{expected_file_count} 首歌曲")
+                if exit_code == 0 or processed_songs >= expected_file_count:
+                    # 正常完成（退出码为0或所有文件已处理）
+                    print(f"调试信息 - ✅ 任务正常完成: 已处理 {processed_songs}/{expected_file_count} 首歌曲, exit_code={exit_code}")
                     mission.state = 'completed'
                     mission.update_progress(status='completed', processed_files=processed_songs, total_files=expected_file_count)
                 else:
                     # 异常退出
-                    print(f"调试信息 - 任务异常退出: exit_code={exit_code}, 已处理 {processed_songs}/{expected_file_count} 首歌曲")
+                    print(f"调试信息 - ❌ 任务异常退出: exit_code={exit_code}, 已处理 {processed_songs}/{expected_file_count} 首歌曲")
                     mission.state = 'failed'
                     mission.update_progress(status='failed', processed_files=processed_songs, total_files=expected_file_count)
                 
                 mission.running = False
-                mission.write()
+                try:
+                    mission.write()
+                except:
+                    pass  # 如果任务目录已删除，写入可能失败
                 self.running.remove(mission)
-                print(f"调试信息 - 任务已从运行队列移除: {mission.input_dir}")
+                print(f"调试信息 - ✅ 任务已从运行队列移除: {mission.input_dir}")
 
+        # 清理无效任务（僵尸任务）
+        self._cleanup_invalid_tasks()
+        
         # 多线程处理逻辑 - 启动尽可能多的任务
         goon = True
         while len(self.running) < self.thread_count and goon:
             goon = self.start_nxt_if_available()
+
+    def _cleanup_invalid_tasks(self):
+        """清理无效任务（僵尸任务）"""
+        invalid_tasks = []
+        for mission in self.running[:]:
+            is_invalid = False
+            
+            # 检查 executor 是否存在
+            if mission.executor is None:
+                is_invalid = True
+                print(f"调试信息 - 发现无效任务（executor 为 None）: {mission.input_dir}")
+            elif mission.executor.process is None:
+                is_invalid = True
+                print(f"调试信息 - 发现无效任务（process 为 None）: {mission.input_dir}")
+            else:
+                # 检查进程是否真的在运行
+                try:
+                    exit_code = mission.executor.process.poll()
+                    if exit_code is not None:
+                        # 进程已结束但还在 running 列表中
+                        is_invalid = True
+                        print(f"调试信息 - 发现无效任务（进程已结束但未清理）: {mission.input_dir}, exit_code={exit_code}")
+                except (ProcessLookupError, OSError):
+                    # 进程不存在
+                    is_invalid = True
+                    print(f"调试信息 - 发现无效任务（进程不存在）: {mission.input_dir}")
+            
+            # 检查任务目录是否存在
+            if mission.mission_dir and not os.path.exists(mission.mission_dir):
+                is_invalid = True
+                print(f"调试信息 - 发现无效任务（任务目录不存在）: {mission.input_dir}")
+            
+            if is_invalid:
+                invalid_tasks.append(mission)
+        
+        # 清理无效任务
+        for mission in invalid_tasks:
+            try:
+                mission.running = False
+                mission.state = 'terminated'
+                self.running.remove(mission)
+                print(f"调试信息 - ✅ 已清理无效任务: {mission.input_dir}")
+            except Exception as e:
+                print(f"调试信息 - ❌ 清理无效任务时出错: {mission.input_dir}, 错误: {e}")
+        
+        if invalid_tasks:
+            print(f"调试信息 - 共清理了 {len(invalid_tasks)} 个无效任务")
 
     def start_nxt_if_available(self):
         if len(self.missions) == 0:
@@ -403,9 +517,13 @@ class Manager:
 
     def _start_single_if_available(self):
         """单个任务处理模式 - 真正的多线程并行处理"""
+        if len(self.missions) == 0:
+            return False
+            
         first: Mission = self.missions[0]
-        print(f"调试信息 - 开始处理单个任务: {first.input_dir}")
+        print(f"调试信息 - 🚀 开始处理单个任务: {first.input_dir}")
         print(f"调试信息 - 当前运行任务数: {len(self.running)}/{self.thread_count}")
+        print(f"调试信息 - 等待队列任务数: {len(self.missions)}")
         
         self.running.append(first)
         self.missions.remove(first)
@@ -448,10 +566,16 @@ class Manager:
             # 记录处理开始时间
             first.update_progress(status='running')
             first.write()
-            print(f"调试信息 - 命令执行成功")
+            print(f"调试信息 - ✅ 命令执行成功，任务已启动")
+            print(f"调试信息 - 进程 PID: {first.executor.process.pid if first.executor.process else 'N/A'}")
             return True
         except Exception as e:
-            print(f"调试信息 - 命令执行失败: {e}")
+            print(f"调试信息 - ❌ 命令执行失败: {e}")
+            # 如果启动失败，从 running 列表中移除
+            if first in self.running:
+                self.running.remove(first)
+            import traceback
+            traceback.print_exc()
             return False
 
     def _start_batch_if_available(self):

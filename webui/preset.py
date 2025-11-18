@@ -248,6 +248,10 @@ class Presets:
     def msst_infer(self, model_type, config_path, model_path, input_folder, store_dict, output_format="wav", skip_existing_files=False):
         from webui.msst import run_inference
 
+        print(f"[preset.py] msst_infer 被调用")
+        print(f"[preset.py] input_folder: {input_folder}")
+        print(f"[preset.py] store_dict: {store_dict}")
+        
         result_queue = multiprocessing.Queue()
         msst_inference = multiprocessing.Process(
             target=run_inference,
@@ -258,15 +262,21 @@ class Presets:
             ),
             name="msst_preset_inference"
         )
+        print(f"[preset.py] 启动MSST推理子进程")
         msst_inference.start()
         msst_inference.join()
+        print(f"[preset.py] MSST推理子进程已结束")
 
         if result_queue.empty():
+            print(f"[preset.py] result_queue为空，返回 (-1, None)")
             return -1, None
         result = result_queue.get()
+        print(f"[preset.py] 从result_queue获取结果: {result}")
         if result[0] == "success":
+            print(f"[preset.py] 推理成功，返回 (1, None)")
             return 1, None
         elif result[0] == "error":
+            print(f"[preset.py] 推理失败，返回 (0, error)")
             return 0, result[1]
 
     def msst_infer_batch(self, model_type, config_path, model_path, input_folders, store_dict, output_format="wav", skip_existing_files=False):
@@ -299,6 +309,11 @@ class Presets:
     def vr_infer(self, model_name, input_folder, output_dir, output_format="wav", skip_existing_files=False):
         from webui.vr import run_inference
 
+        print(f"[preset.py] vr_infer 被调用")
+        print(f"[preset.py] model_name: {model_name}")
+        print(f"[preset.py] input_folder: {input_folder}")
+        print(f"[preset.py] output_dir: {output_dir}")
+        
         model_file = os.path.join(self.vr_model_path, model_name)
         result_queue = multiprocessing.Queue()
         vr_inference = multiprocessing.Process(
@@ -311,15 +326,21 @@ class Presets:
             ),
             name="vr_preset_inference"
         )
+        print(f"[preset.py] 启动VR推理子进程")
         vr_inference.start()
         vr_inference.join()
+        print(f"[preset.py] VR推理子进程已结束")
 
         if result_queue.empty():
+            print(f"[preset.py] result_queue为空，返回 (-1, None)")
             return -1, None
         result = result_queue.get()
+        print(f"[preset.py] 从result_queue获取结果: {result}")
         if result[0] == "success":
+            print(f"[preset.py] 推理成功，返回 (1, None)")
             return 1, None
         elif result[0] == "error":
+            print(f"[preset.py] 推理失败，返回 (0, error)")
             return 0, result[1]
 
 def preset_inference_audio(input_audio, store_dir, preset, force_cpu, output_format, use_tta):

@@ -60,7 +60,7 @@
         "results_path": null
     },
     "settings": {
-        "uvr_model_dir": "E:/项目/2025/202508/MSST/MSST WebUI/MSST WebUI/pretrain/VR_Models",
+        "uvr_model_dir": "D:/MSST WebUI/pretrain/VR_Models",
         "port": 7860,
         "language": "Auto",
         "download_link": "Auto",

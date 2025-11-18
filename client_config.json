@@ -3,8 +3,8 @@
     "server_port": 7860,
     "server_address": "localhost",
     "user_dir": "E:/MSSTuser",
-    "cache_dir": "C:/Users/Administrator/AppData/Local/MSST_WebUI/cache",
-    "temp_dir": "C:/Users/Administrator/AppData/Local/MSST_WebUI/temp",
+    "cache_dir": "E:/MSSTcache",
+    "temp_dir": "E:/MSSTtemp",
     "auto_clean_temp": true,
     "max_file_size": 100,
     "allowed_formats": [

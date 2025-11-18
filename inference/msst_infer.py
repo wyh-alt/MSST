@@ -176,6 +176,7 @@ class MSSeparator:
 			missing_outputs = []
 			
 			if skip_existing_files:
+				self.logger.debug(f"[跳过检查] 检查文件: {os.path.basename(path)}")
 				for instr in self.config.training.instruments:
 					save_dir = self.store_dirs.get(instr, "")
 					if save_dir and type(save_dir) == str:
@@ -192,11 +193,12 @@ class MSSeparator:
 				
 				# 如果所有输出文件都已存在，跳过处理
 				if all_outputs_exist:
-					self.logger.info(f"跳过已存在的文件: {os.path.basename(path)} (所有输出文件已存在)")
+					self.logger.info(f"⏭️  跳过已存在的文件: {os.path.basename(path)} (所有输出文件已存在)")
+					self.logger.debug(f"[跳过检查] 所有输出都已存在，检查的输出目录: {list(set([self.store_dirs.get(i, '') for i in self.config.training.instruments]))}")
 					skipped_files.append(os.path.basename(path))
 					continue
 				else:
-					self.logger.debug(f"处理文件: {os.path.basename(path)} (缺少输出: {', '.join(missing_outputs)})")
+					self.logger.debug(f"✅ 处理文件: {os.path.basename(path)} (缺少输出: {', '.join(missing_outputs)})")
 			
 			try:
 				mix, sr = librosa.load(path, sr=sample_rate, mono=False)
@@ -230,8 +232,10 @@ class MSSeparator:
 		
 		# 输出处理统计信息
 		if skip_existing_files and skipped_files:
-			self.logger.info(f"跳过了 {len(skipped_files)} 个已存在的文件: {', '.join(skipped_files)}")
+			self.logger.info(f"跳过了 {len(skipped_files)} 个已存在的文件")
+			self.logger.debug(f"跳过的文件列表: {', '.join(skipped_files[:10])}{'...' if len(skipped_files) > 10 else ''}")
 		self.logger.info(f"成功处理了 {len(success_files)} 个文件")
+		self.logger.info(f"统计信息: 输入文件总数={len(file_lists)}, 成功处理={len(success_files)}, 跳过={len(skipped_files)}")
 		
 		return success_files
 

@@ -132,14 +132,38 @@ if __name__ == '__main__':
     
     # 设置临时目录
     temp_dir = client_config.get("temp_dir", os.path.join(os.path.expanduser("~"), "AppData", "Local", "MSST_WebUI", "temp"))
-    os.makedirs(temp_dir, exist_ok=True)
-    os.environ["GRADIO_TEMP_DIR"] = os.path.abspath(temp_dir)
+    try:
+        print(f"正在创建临时目录: {temp_dir}")
+        print(f"临时目录类型: {type(temp_dir)}")
+        print(f"临时目录长度: {len(temp_dir) if temp_dir else 'None'}")
+        
+        # 确保路径是字符串且格式正确
+        temp_dir = str(temp_dir).strip()
+        
+        # 使用 Path 对象处理路径，避免路径问题
+        temp_dir_path = Path(temp_dir)
+        temp_dir_path.mkdir(parents=True, exist_ok=True)
+        temp_dir = str(temp_dir_path.absolute())
+        
+        os.environ["GRADIO_TEMP_DIR"] = temp_dir
+        print(f"临时目录创建成功: {temp_dir}")
+    except Exception as e:
+        print(f"创建临时目录失败: {e}")
+        print(f"将使用当前目录下的 temp 文件夹")
+        temp_dir = os.path.abspath("./temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        os.environ["GRADIO_TEMP_DIR"] = temp_dir
     
     # 创建其他必要目录
     for dir_key in ["user_dir", "cache_dir"]:
         dir_path = client_config.get(dir_key)
         if dir_path:
-            os.makedirs(dir_path, exist_ok=True)
+            try:
+                print(f"正在创建{dir_key}: {dir_path}")
+                Path(dir_path).mkdir(parents=True, exist_ok=True)
+                print(f"{dir_key}创建成功")
+            except Exception as e:
+                print(f"创建{dir_key}失败: {e}")
 
     interface = gr.Blocks(
         theme=gr.Theme.load(theme_path),
