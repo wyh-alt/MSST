@@ -39,7 +39,8 @@ def change_psw(req: gr.Request, psw, new_psw):
 def get_user_list():
     from client import users
     names = list(users.keys())
-    names.remove('admin')
+    if 'admin' in names:
+        names.remove('admin')
     return names
 
 
