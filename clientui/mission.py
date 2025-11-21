@@ -463,14 +463,15 @@ class Manager:
         invalid_tasks = []
         for mission in self.running[:]:
             is_invalid = False
+            invalid_reason = ""
             
             # 检查 executor 是否存在
             if mission.executor is None:
                 is_invalid = True
-                print(f"调试信息 - 发现无效任务（executor 为 None）: {mission.input_dir}")
+                invalid_reason = "executor 为 None"
             elif mission.executor.process is None:
                 is_invalid = True
-                print(f"调试信息 - 发现无效任务（process 为 None）: {mission.input_dir}")
+                invalid_reason = "process 为 None"
             else:
                 # 检查进程是否真的在运行
                 try:
@@ -478,32 +479,53 @@ class Manager:
                     if exit_code is not None:
                         # 进程已结束但还在 running 列表中
                         is_invalid = True
-                        print(f"调试信息 - 发现无效任务（进程已结束但未清理）: {mission.input_dir}, exit_code={exit_code}")
+                        invalid_reason = f"进程已结束 (exit_code={exit_code})"
                 except (ProcessLookupError, OSError):
                     # 进程不存在
                     is_invalid = True
-                    print(f"调试信息 - 发现无效任务（进程不存在）: {mission.input_dir}")
+                    invalid_reason = "进程不存在"
             
             # 检查任务目录是否存在
             if mission.mission_dir and not os.path.exists(mission.mission_dir):
                 is_invalid = True
-                print(f"调试信息 - 发现无效任务（任务目录不存在）: {mission.input_dir}")
+                invalid_reason = "任务目录不存在"
             
             if is_invalid:
+                print(f"调试信息 - ⚠️  发现无效任务（{invalid_reason}）: {mission.input_dir}")
                 invalid_tasks.append(mission)
         
         # 清理无效任务
         for mission in invalid_tasks:
             try:
                 mission.running = False
-                mission.state = 'terminated'
+                # 如果任务状态还是 running，改为 terminated
+                if mission.state == 'running':
+                    mission.state = 'terminated'
+                try:
+                    mission.write()
+                except:
+                    pass  # 如果任务目录已删除，写入可能失败
+                
+                # 更新进度文件状态
+                if mission.mission_dir:
+                    try:
+                        from clientui.task_progress import task_progress
+                        task_progress.update_progress(mission.mission_dir, {
+                            'status': 'terminated'
+                        })
+                    except:
+                        pass
+                
                 self.running.remove(mission)
                 print(f"调试信息 - ✅ 已清理无效任务: {mission.input_dir}")
+            except ValueError:
+                # 任务可能已经被其他线程移除
+                pass
             except Exception as e:
                 print(f"调试信息 - ❌ 清理无效任务时出错: {mission.input_dir}, 错误: {e}")
         
         if invalid_tasks:
-            print(f"调试信息 - 共清理了 {len(invalid_tasks)} 个无效任务")
+            print(f"调试信息 - 📊 共清理了 {len(invalid_tasks)} 个无效任务，当前运行任务数: {len(self.running)}")
 
     def start_nxt_if_available(self):
         if len(self.missions) == 0:
@@ -670,13 +692,28 @@ class Manager:
 
     def get_status(self):
         """获取管理器状态信息"""
+        # 先清理无效任务，确保状态准确
+        self._cleanup_invalid_tasks()
+        
+        # 统计真正在运行的任务（有 executor 且 process 存在且进程还在运行）
+        actual_running_count = 0
+        for mission in self.running:
+            if mission.executor is not None and mission.executor.process is not None:
+                try:
+                    exit_code = mission.executor.process.poll()
+                    if exit_code is None:  # 进程还在运行
+                        actual_running_count += 1
+                except (ProcessLookupError, OSError):
+                    # 进程不存在，不计入运行任务
+                    pass
+        
         return {
             'thread_count': self.thread_count,
             'batch_mode': self.batch_mode,
             'force_batch_mode': self.force_batch_mode,
             'waiting_tasks': len(self.missions),
-            'running_tasks': len(self.running),
-            'total_tasks': len(self.missions) + len(self.running)
+            'running_tasks': actual_running_count,  # 使用实际运行的任务数
+            'total_tasks': len(self.missions) + len(self.running)  # 总任务数包括所有在 running 列表中的任务
         }
 
 
