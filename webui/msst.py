@@ -201,7 +201,8 @@ def run_inference(model_type, config_path, model_path, device, gpu_ids, output_f
         separator.del_cache()
 
         logger.info(f"Successfully separated files: {success_files}")
-        result_queue.put(("success", success_files))
+        # 只返回文件数量，避免大列表导致Queue阻塞
+        result_queue.put(("success", len(success_files)))
     except Exception as e:
         logger.error(f"Separation failed: {str(e)}\n{traceback.format_exc()}")
         result_queue.put(("error", str(e)))
@@ -250,7 +251,8 @@ def run_inference_batch(model_type, config_path, model_path, device, gpu_ids, ou
         separator.del_cache()
 
         logger.info(f"批量处理完成，总共成功处理 {len(total_success_files)} 个文件")
-        result_queue.put(("success", total_success_files))
+        # 只返回文件数量，避免大列表导致Queue阻塞
+        result_queue.put(("success", len(total_success_files)))
     except Exception as e:
         logger.error(f"Batch separation failed: {str(e)}\n{traceback.format_exc()}")
         result_queue.put(("error", str(e)))

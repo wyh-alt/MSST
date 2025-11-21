@@ -374,12 +374,16 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
             input_file_count = len([f for f in os.listdir(input_to_use) if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a', '.aac'))])
     except:
         pass
-    print(f"调试信息 - 输入文件数量: {input_file_count}")
+    print(f"调试信息 - 输入文件数量: {input_file_count}", flush=True)
+    logger.info(f"调试信息 - 输入文件数量: {input_file_count}")
 
-    print(f"=== 开始多步骤处理循环，总步骤数: {preset.total_steps} ===")
+    print(f"=== 开始多步骤处理循环，总步骤数: {preset.total_steps} ===", flush=True)
+    logger.info(f"=== 开始多步骤处理循环，总步骤数: {preset.total_steps} ===")
     for step in range(preset.total_steps):
-        print(f"\n=== 循环迭代: step={step}, current_step={current_step} ===")
-        print(f"调试信息 - 步骤处理前: input_to_use={input_to_use}, tmp_store_dir={tmp_store_dir}")
+        print(f"\n=== 循环迭代: step={step}, current_step={current_step} ===", flush=True)
+        logger.info(f"=== 循环迭代: step={step}, current_step={current_step} ===")
+        print(f"调试信息 - 步骤处理前: input_to_use={input_to_use}, tmp_store_dir={tmp_store_dir}", flush=True)
+        logger.info(f"调试信息 - 步骤处理前: input_to_use={input_to_use}, tmp_store_dir={tmp_store_dir}")
         
         if current_step == 0:
             # 第一步使用已经确定的input_to_use（可能是原始目录或临时目录）
@@ -522,26 +526,52 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
                 storage[stem].append(direct_output)
 
             logger.debug(f"input_to_next: {input_to_next}, output_to_storage: {output_to_storage}, storage: {storage}")
-            print(f"调试信息 - 开始执行MSST推理: model={model_name}, input={input_to_use}, storage={storage}")
-            result = preset.msst_infer(msst_model_type, config_path, model_path, input_to_use, storage, output_format, skip_existing_files)
-            print(f"调试信息 - MSST推理完成，返回结果: {result}")
-            if result[0] == 0:
-                logger.error(f"Failed to run MSST model {model_name}, error: {result[1]}")
-                print(f"调试信息 - MSST推理失败，提前返回")
+            print(f"调试信息 - 开始执行MSST推理: model={model_name}, input={input_to_use}, storage={storage}", flush=True)
+            logger.info(f"调试信息 - 开始执行MSST推理: model={model_name}, input={input_to_use}")
+            try:
+                result = preset.msst_infer(msst_model_type, config_path, model_path, input_to_use, storage, output_format, skip_existing_files)
+                print(f"调试信息 - MSST推理完成，返回结果: {result}", flush=True)
+                logger.info(f"调试信息 - MSST推理完成，返回结果: {result}")
+                
+                if result is None:
+                    logger.error(f"MSST推理返回None，这不应该发生")
+                    print(f"调试信息 - MSST推理返回None，提前返回")
+                    # 停止监控线程
+                    if progress_monitor_thread:
+                        progress_monitor_stop.set()
+                        progress_monitor_thread.join(timeout=2)
+                    return
+                
+                if result[0] == 0:
+                    logger.error(f"Failed to run MSST model {model_name}, error: {result[1]}")
+                    print(f"调试信息 - MSST推理失败，提前返回")
+                    # 停止监控线程
+                    if progress_monitor_thread:
+                        progress_monitor_stop.set()
+                        progress_monitor_thread.join(timeout=2)
+                    return
+                elif result[0] == -1:
+                    logger.warning(f"MSST推理被用户终止")
+                    print(f"调试信息 - MSST推理被用户终止，提前返回")
+                    # 停止监控线程
+                    if progress_monitor_thread:
+                        progress_monitor_stop.set()
+                        progress_monitor_thread.join(timeout=2)
+                    return
+                else:
+                    print(f"调试信息 - MSST推理成功，继续下一步")
+                    logger.info(f"调试信息 - MSST推理成功，继续下一步，准备执行步骤 {current_step + 2}/{preset.total_steps}")
+            except Exception as e:
+                logger.error(f"MSST推理过程中发生异常: {str(e)}")
+                print(f"调试信息 - MSST推理过程中发生异常: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                logger.error(traceback.format_exc())
                 # 停止监控线程
                 if progress_monitor_thread:
                     progress_monitor_stop.set()
                     progress_monitor_thread.join(timeout=2)
                 return
-            elif result[0] == -1:
-                print(f"调试信息 - MSST推理被用户终止，提前返回")
-                # 停止监控线程
-                if progress_monitor_thread:
-                    progress_monitor_stop.set()
-                    progress_monitor_thread.join(timeout=2)
-                return
-            else:
-                print(f"调试信息 - MSST推理成功，继续下一步")
         
         # 停止监控线程
         if progress_monitor_thread:
@@ -587,14 +617,27 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
             print(f"调试信息 - 检查输出目录时出错: {e}")
         
         current_step += 1
-        print(f"调试信息 - 步骤 {step + 1} 完成，current_step 更新为 {current_step}")
-        print(f"=== 循环迭代 {step + 1} 结束 ===")
+        print(f"调试信息 - 步骤 {step + 1} 完成，current_step 更新为 {current_step}", flush=True)
+        logger.info(f"调试信息 - 步骤 {step + 1} 完成，current_step 更新为 {current_step}")
+        print(f"=== 循环迭代 {step + 1} 结束 ===", flush=True)
+        logger.info(f"=== 循环迭代 {step + 1} 结束，准备执行下一步 ===")
+        
+        # 检查是否还有更多步骤需要执行
+        if current_step < preset.total_steps:
+            print(f"调试信息 - 还有 {preset.total_steps - current_step} 个步骤需要执行", flush=True)
+            logger.info(f"调试信息 - 还有 {preset.total_steps - current_step} 个步骤需要执行")
+        else:
+            print(f"调试信息 - 所有步骤已完成", flush=True)
+            logger.info(f"调试信息 - 所有步骤已完成")
 
-    print(f"\n=== 所有步骤处理完成 ===")
-    print(f"调试信息 - 共完成 {current_step} 个步骤（预期 {preset.total_steps} 个步骤）")
+    print(f"\n=== 所有步骤处理完成 ===", flush=True)
+    logger.info(f"=== 所有步骤处理完成 ===")
+    print(f"调试信息 - 共完成 {current_step} 个步骤（预期 {preset.total_steps} 个步骤）", flush=True)
+    logger.info(f"调试信息 - 共完成 {current_step} 个步骤（预期 {preset.total_steps} 个步骤）")
     
     if os.path.exists(TEMP_PATH):
-        print(f"调试信息 - 清理临时目录: {TEMP_PATH}")
+        print(f"调试信息 - 清理临时目录: {TEMP_PATH}", flush=True)
+        logger.info(f"调试信息 - 清理临时目录: {TEMP_PATH}")
         shutil.rmtree(TEMP_PATH)
     
     # 清理输出目录中的 .mission_dir 标记文件（路径方式）
@@ -698,7 +741,9 @@ def main_batch(input_folders, store_dir, preset_path, output_format, skip_existi
     current_step = 0
     temp_dirs_to_cleanup = []  # 记录需要清理的临时目录
 
+    print(f"调试信息 - 开始批量处理循环，总步骤数: {preset.total_steps}")
     for step in range(preset.total_steps):
+        print(f"\n=== 批量处理循环迭代: step={step}, current_step={current_step} ===")
         data = preset.get_step(step)
         model_type = data["model_type"]
         model_name = data["model_name"]
@@ -706,6 +751,8 @@ def main_batch(input_folders, store_dir, preset_path, output_format, skip_existi
         output_to_storage = data["output_to_storage"]
 
         logger.info(f"\033[33mStep {current_step + 1}: Running batch inference using {model_name}\033[0m")
+        print(f"调试信息 - 步骤 {current_step + 1}: 模型类型={model_type}, 模型名称={model_name}")
+        print(f"调试信息 - 步骤 {current_step + 1}: input_to_next={input_to_next}, output_to_storage={output_to_storage}")
         
         # 为每个步骤创建临时目录（在缓存目录中）
         step_temp_dir = os.path.join(TEMP_PATH, f"step_{current_step + 1}_tmp")
@@ -749,14 +796,37 @@ def main_batch(input_folders, store_dir, preset_path, output_format, skip_existi
 
             logger.debug(f"input_to_next: {input_to_next}, output_to_storage: {output_to_storage}, storage: {storage}")
             result = preset.msst_infer_batch(msst_model_type, config_path, model_path, input_folders, storage, output_format, skip_existing_files)
+            print(f"调试信息 - 步骤 {current_step + 1} MSST批量推理返回结果: {result}")
             if result[0] == 0:
                 logger.error(f"Failed to run MSST batch model {model_name}, error: {result[1]}")
+                print(f"调试信息 - 步骤 {current_step + 1} 失败，提前返回")
                 return
+            elif result[0] == -1:
+                logger.warning(f"MSST batch model {model_name} was terminated by user")
+                print(f"调试信息 - 步骤 {current_step + 1} 被用户终止，提前返回")
+                return
+            else:
+                print(f"调试信息 - 步骤 {current_step + 1} 成功，继续下一步")
         
         # 更新输入文件夹列表为当前步骤的输出目录
+        print(f"调试信息 - 步骤 {current_step + 1} 完成，更新输入文件夹列表")
+        print(f"调试信息 - 步骤 {current_step + 1} 输出目录数量: {len(step_output_dirs)}")
+        if len(step_output_dirs) > 0:
+            print(f"调试信息 - 步骤 {current_step + 1} 第一个输出目录: {step_output_dirs[0]}")
+            # 检查输出目录是否存在且有文件
+            if os.path.exists(step_output_dirs[0]):
+                output_files = [f for f in os.listdir(step_output_dirs[0]) 
+                              if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))]
+                print(f"调试信息 - 步骤 {current_step + 1} 第一个输出目录包含 {len(output_files)} 个文件")
+        
         input_folders = step_output_dirs
         current_step += 1
+        print(f"调试信息 - 步骤 {step + 1} 完成，current_step 更新为 {current_step}")
+        print(f"=== 批量处理循环迭代 {step + 1} 结束 ===")
 
+    print(f"\n=== 所有步骤处理完成 ===")
+    print(f"调试信息 - 共完成 {current_step} 个步骤（预期 {preset.total_steps} 个步骤）")
+    
     # 清理所有临时目录
     try:
         for temp_dir in temp_dirs_to_cleanup:

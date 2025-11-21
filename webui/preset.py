@@ -265,19 +265,28 @@ class Presets:
         print(f"[preset.py] 启动MSST推理子进程")
         msst_inference.start()
         msst_inference.join()
-        print(f"[preset.py] MSST推理子进程已结束")
+        print(f"[preset.py] MSST推理子进程已结束", flush=True)
+        logger.info(f"[preset.py] MSST推理子进程已结束，exitcode={msst_inference.exitcode}")
 
         if result_queue.empty():
-            print(f"[preset.py] result_queue为空，返回 (-1, None)")
+            print(f"[preset.py] result_queue为空，返回 (-1, None)", flush=True)
+            logger.warning(f"[preset.py] result_queue为空，返回 (-1, None)")
             return -1, None
         result = result_queue.get()
-        print(f"[preset.py] 从result_queue获取结果: {result}")
+        print(f"[preset.py] 从result_queue获取结果: {result}", flush=True)
+        logger.info(f"[preset.py] 从result_queue获取结果: {result}")
         if result[0] == "success":
-            print(f"[preset.py] 推理成功，返回 (1, None)")
+            print(f"[preset.py] 推理成功，返回 (1, None)", flush=True)
+            logger.info(f"[preset.py] 推理成功，返回 (1, None)")
             return 1, None
         elif result[0] == "error":
-            print(f"[preset.py] 推理失败，返回 (0, error)")
+            print(f"[preset.py] 推理失败，返回 (0, error)", flush=True)
+            logger.error(f"[preset.py] 推理失败，返回 (0, error): {result[1]}")
             return 0, result[1]
+        else:
+            print(f"[preset.py] 未知结果类型: {result[0]}，返回 (-1, None)", flush=True)
+            logger.warning(f"[preset.py] 未知结果类型: {result[0]}，返回 (-1, None)")
+            return -1, None
 
     def msst_infer_batch(self, model_type, config_path, model_path, input_folders, store_dict, output_format="wav", skip_existing_files=False):
         """
@@ -285,6 +294,10 @@ class Presets:
         """
         from webui.msst import run_inference_batch
 
+        print(f"[preset.py] msst_infer_batch 被调用")
+        print(f"[preset.py] input_folders: {input_folders}")
+        print(f"[preset.py] store_dict: {store_dict}")
+        
         result_queue = multiprocessing.Queue()
         msst_inference = multiprocessing.Process(
             target=run_inference_batch,
@@ -295,16 +308,25 @@ class Presets:
             ),
             name="msst_preset_inference_batch"
         )
+        print(f"[preset.py] 启动MSST批量推理子进程")
         msst_inference.start()
         msst_inference.join()
+        print(f"[preset.py] MSST批量推理子进程已结束，退出码: {msst_inference.exitcode}")
 
         if result_queue.empty():
+            print(f"[preset.py] result_queue为空，返回 (-1, None)")
             return -1, None
         result = result_queue.get()
+        print(f"[preset.py] 从result_queue获取结果: {result}")
         if result[0] == "success":
+            print(f"[preset.py] 批量推理成功，返回 (1, None)")
             return 1, None
         elif result[0] == "error":
+            print(f"[preset.py] 批量推理失败，返回 (0, error)")
             return 0, result[1]
+        else:
+            print(f"[preset.py] 未知结果类型: {result[0]}，返回 (-1, None)")
+            return -1, None
 
     def vr_infer(self, model_name, input_folder, output_dir, output_format="wav", skip_existing_files=False):
         from webui.vr import run_inference
