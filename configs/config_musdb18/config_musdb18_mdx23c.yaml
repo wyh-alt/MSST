@@ -179,4 +179,4 @@ augmentations:
 inference:
   batch_size: 1
   dim_t: 256
-  num_overlap: 4
+  num_overlap: 8

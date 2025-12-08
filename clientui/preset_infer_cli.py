@@ -205,14 +205,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
                 else:
                     step_keys = list(progress_info.get('step_progress', {}).keys())
                     print(f"调试信息 - ✅ 步骤进度信息已存在: {step_keys}")
-                    # 验证步骤数量是否匹配
-                    expected_steps = preset.total_steps
-                    actual_steps = len(step_keys)
-                    if actual_steps != expected_steps:
-                        print(f"调试信息 - ⚠️  步骤数量不匹配: 预期 {expected_steps} 个，实际 {actual_steps} 个，重新初始化")
-                        task_progress.init_progress(mission_dir_for_progress, input_folder, preset_filename)
-                    else:
-                        print(f"调试信息 - ✅ 步骤数量匹配: {expected_steps} 个步骤")
+                    # 注意: 步骤数量验证将在 preset 对象创建后进行（见下方第343-356行）
         except Exception as e:
             print(f"调试信息 - ❌ 初始化进度追踪时出错: {e}")
             import traceback
@@ -435,6 +428,15 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         progress_monitor_stop = threading.Event()
         progress_monitor_thread = None
         
+        # 在步骤开始前记录输出目录中已有的文件数量（用于最后一步时排除之前步骤的输出）
+        initial_file_count = 0
+        if os.path.exists(tmp_store_dir):
+            initial_files = [f for f in os.listdir(tmp_store_dir) 
+                           if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))]
+            initial_file_count = len(initial_files)
+            if initial_file_count > 0:
+                print(f"调试信息 - 步骤 {current_step + 1} 输出目录已有 {initial_file_count} 个文件（来自之前步骤）")
+        
         if preset.total_steps > 1 and mission_dir_for_progress and task_progress:
             def monitor_progress():
                 """后台监控线程，定期检查输出目录文件数并更新进度"""
@@ -444,6 +446,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
                 print(f"调试信息 - [监控线程] 步骤 {current_step + 1} 监控线程已启动")
                 print(f"调试信息 - [监控线程] 监控目录: {tmp_store_dir}")
                 print(f"调试信息 - [监控线程] 任务目录: {mission_dir_for_progress}")
+                print(f"调试信息 - [监控线程] 初始文件数: {initial_file_count}")
                 
                 while not progress_monitor_stop.is_set():
                     try:
@@ -452,7 +455,8 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
                         if os.path.exists(tmp_store_dir):
                             files = [f for f in os.listdir(tmp_store_dir) 
                                     if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))]
-                            current_count = len(files)
+                            # 减去初始文件数，只统计当前步骤新增的文件
+                            current_count = max(0, len(files) - initial_file_count)
                         else:
                             # 目录不存在，可能是第一步刚开始
                             if check_count % 10 == 0:  # 每10秒输出一次
@@ -494,7 +498,10 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
             storage = {primary_stem: [], secondary_stem: []}
             storage[input_to_next].append(tmp_store_dir)
             for stem in output_to_storage:
-                storage[stem].append(direct_output)
+                # 避免在最后一步时重复添加相同的输出目录
+                # 当 tmp_store_dir == direct_output 且 stem == input_to_next 时会发生重复
+                if direct_output not in storage[stem]:
+                    storage[stem].append(direct_output)
 
             logger.debug(f"input_to_next: {input_to_next}, output_to_storage: {output_to_storage}, storage: {storage}")
             print(f"调试信息 - 开始执行VR推理: model={model_name}, input={input_to_use}, storage={storage}")
@@ -523,7 +530,10 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
             storage = {stem: [] for stem in stems}
             storage[input_to_next].append(tmp_store_dir)
             for stem in output_to_storage:
-                storage[stem].append(direct_output)
+                # 避免在最后一步时重复添加相同的输出目录
+                # 当 tmp_store_dir == direct_output 且 stem == input_to_next 时会发生重复
+                if direct_output not in storage[stem]:
+                    storage[stem].append(direct_output)
 
             logger.debug(f"input_to_next: {input_to_next}, output_to_storage: {output_to_storage}, storage: {storage}")
             print(f"调试信息 - 开始执行MSST推理: model={model_name}, input={input_to_use}, storage={storage}", flush=True)
@@ -580,14 +590,16 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         
         # 步骤完成后，做最终的进度更新
         if preset.total_steps > 1 and mission_dir_for_progress and task_progress:
-            # 统计输出目录中的文件数量作为已处理数量
+            # 统计输出目录中的文件数量作为已处理数量（减去初始文件数，只统计当前步骤新增的）
             processed_count = 0
             try:
                 if os.path.exists(tmp_store_dir):
                     files = [f for f in os.listdir(tmp_store_dir) 
                             if f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a'))]
-                    processed_count = len(files)
-                    print(f"调试信息 - 步骤 {current_step + 1} 输出目录包含 {processed_count} 个文件")
+                    total_files = len(files)
+                    # 减去初始文件数，只统计当前步骤新增的文件
+                    processed_count = max(0, total_files - initial_file_count)
+                    print(f"调试信息 - 步骤 {current_step + 1} 输出目录包含 {total_files} 个文件（初始: {initial_file_count}, 新增: {processed_count}）")
                 else:
                     print(f"调试信息 - ⚠️  步骤 {current_step + 1} 输出目录不存在: {tmp_store_dir}")
             except Exception as e:
@@ -650,15 +662,16 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
             except Exception as e:
                 print(f"调试信息 - ⚠️  清理标记文件失败: {e}")
     
-    # 统计最终处理的文件数量
-    processed_files = 0
+    # 更新最终进度（使用输入文件数，因为总进度代表处理了多少首歌曲，而不是输出了多少个文件）
     try:
         if os.path.exists(store_dir):
+            output_files_count = 0
             for root, _, files in os.walk(store_dir):
-                processed_files += sum(1 for f in files if f.lower().endswith(('.wav', '.flac', '.mp3')))
-            print(f"调试信息 - 最终输出目录 {store_dir} 包含 {processed_files} 个文件")
-        # 更新最终进度
-        update_progress(input_folder, processed_files)
+                output_files_count += sum(1 for f in files if f.lower().endswith(('.wav', '.flac', '.mp3')))
+            print(f"调试信息 - 最终输出目录 {store_dir} 包含 {output_files_count} 个文件")
+        # 更新最终进度（使用输入文件数量，表示成功处理的歌曲数）
+        update_progress(input_folder, input_file_count)
+        print(f"调试信息 - 更新总进度: {input_file_count} 首歌曲")
     except Exception as e:
         logger.error(f"统计最终处理文件数量时出错: {e}")
 
@@ -777,7 +790,9 @@ def main_batch(input_folders, store_dir, preset_path, output_format, skip_existi
                 storage = {primary_stem: [], secondary_stem: []}
                 storage[input_to_next].append(step_output_dirs[i])
                 for stem in output_to_storage:
-                    storage[stem].append(store_dir)
+                    # 避免重复添加相同的输出目录
+                    if store_dir not in storage[stem]:
+                        storage[stem].append(store_dir)
 
                 logger.debug(f"处理文件夹 {i+1}/{len(input_folders)}: {input_folder}")
                 result = preset.vr_infer(model_name, input_folder, storage, output_format, skip_existing_files)
@@ -792,7 +807,9 @@ def main_batch(input_folders, store_dir, preset_path, output_format, skip_existi
             storage = {stem: [] for stem in stems}
             storage[input_to_next].extend(step_output_dirs)
             for stem in output_to_storage:
-                storage[stem].append(store_dir)
+                # 避免重复添加相同的输出目录
+                if store_dir not in storage[stem]:
+                    storage[stem].append(store_dir)
 
             logger.debug(f"input_to_next: {input_to_next}, output_to_storage: {output_to_storage}, storage: {storage}")
             result = preset.msst_infer_batch(msst_model_type, config_path, model_path, input_folders, storage, output_format, skip_existing_files)
