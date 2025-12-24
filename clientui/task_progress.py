@@ -470,13 +470,22 @@ class TaskProgress:
             # 首先尝试从任务目录的inputs子目录统计（上传方式）
             inputs_dir = os.path.join(mission_dir, 'inputs')
             if os.path.exists(inputs_dir):
-                # 统计inputs目录下的子目录数量（每个子目录代表一首上传的歌）
+                # 先检查inputs目录下是否直接包含音频文件（单步骤处理多文件的情况）
+                audio_files = []
                 subdirs = []
                 for item in os.listdir(inputs_dir):
                     item_path = os.path.join(inputs_dir, item)
                     if os.path.isdir(item_path):
                         subdirs.append(item_path)
+                    elif os.path.isfile(item_path) and item.lower().endswith(('.wav', '.flac', '.mp3', '.m4a', '.aac', '.ogg')):
+                        audio_files.append(item_path)
                 
+                # 如果直接包含音频文件，返回音频文件数量
+                if audio_files:
+                    # print(f"调试信息 - 从inputs目录统计到 {len(audio_files)} 首歌（直接音频文件）")  # 注释掉调试信息
+                    return len(audio_files)
+                
+                # 否则统计子目录数量（每个子目录代表一首上传的歌）
                 if subdirs:
                     # print(f"调试信息 - 从inputs目录统计到 {len(subdirs)} 首歌")  # 注释掉调试信息
                     return len(subdirs)

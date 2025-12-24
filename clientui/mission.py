@@ -285,15 +285,24 @@ class Manager:
             is_batch_task = False
             expected_file_count = 1
             
-            # 对于上传下载方式，检查inputs目录中的子目录数量
+            # 对于上传下载方式，检查inputs目录中的内容
             if mission.mission_dir:
                 inputs_dir = os.path.join(mission.mission_dir, 'inputs')
                 if os.path.exists(inputs_dir):
-                    subdirs = [d for d in os.listdir(inputs_dir) 
-                              if os.path.isdir(os.path.join(inputs_dir, d))]
-                    if len(subdirs) > 1:
+                    # 先检查是否直接包含音频文件（单步骤处理多文件的情况）
+                    direct_audio_files = [f for f in os.listdir(inputs_dir) 
+                                         if os.path.isfile(os.path.join(inputs_dir, f)) and 
+                                         f.lower().endswith(('.wav', '.flac', '.mp3', '.m4a', '.aac', '.ogg'))]
+                    if len(direct_audio_files) > 1:
                         is_batch_task = True
-                        expected_file_count = len(subdirs)
+                        expected_file_count = len(direct_audio_files)
+                    else:
+                        # 否则检查子目录数量
+                        subdirs = [d for d in os.listdir(inputs_dir) 
+                                  if os.path.isdir(os.path.join(inputs_dir, d))]
+                        if len(subdirs) > 1:
+                            is_batch_task = True
+                            expected_file_count = len(subdirs)
             
             # 如果不是上传下载方式，检查原始输入目录
             if not is_batch_task and mission.input_dir and os.path.exists(mission.input_dir):
