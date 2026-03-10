@@ -97,14 +97,14 @@ class ClientConfigManager:
                 self.client_config = json.load(f)
         except FileNotFoundError:
             # 创建默认客户端配置，使用程序中的目录设置
-            default_user_dir = "E:/MSSTuser"  # 与clientui/actions.py中的设置保持一致
+            from utils.constant import _default_user_dir, _default_cache_dir, _default_temp_dir
             self.client_config = {
                 "client_port": 7861,
                 "server_port": 7860,
                 "server_address": "localhost",
-                "user_dir": default_user_dir,  # 合并的上传下载目录
-                "cache_dir": (os.path.join(os.path.expanduser("~"), "AppData", "Local", "MSST_WebUI", "cache")).replace('\\', '/'),
-                "temp_dir": (os.path.join(os.path.expanduser("~"), "AppData", "Local", "MSST_WebUI", "temp")).replace('\\', '/'),
+                "user_dir": _default_user_dir(),
+                "cache_dir": _default_cache_dir(),
+                "temp_dir": _default_temp_dir(),
                 "auto_clean_temp": True,
                 "max_file_size": 100,  # MB
                 "allowed_formats": ["wav", "mp3", "flac", "m4a", "ogg"]
@@ -400,9 +400,10 @@ class ClientConfigManager:
                 self.client_port_var.set("7861")
                 self.server_port_var.set("7860")
                 self.server_address_var.set("localhost")
-                self.user_dir_var.set("E:/MSSTuser")  # 与程序中的设置保持一致
-                self.cache_dir_var.set((os.path.join(os.path.expanduser("~"), "AppData", "Local", "MSST_WebUI", "cache")).replace('\\','/'))
-                self.temp_dir_var.set((os.path.join(os.path.expanduser("~"), "AppData", "Local", "MSST_WebUI", "temp")).replace('\\','/'))
+                from utils.constant import _default_user_dir, _default_cache_dir, _default_temp_dir
+                self.user_dir_var.set(_default_user_dir())
+                self.cache_dir_var.set(_default_cache_dir())
+                self.temp_dir_var.set(_default_temp_dir())
                 self.auto_clean_var.set(True)
                 self.max_file_size_var.set("100")
                 

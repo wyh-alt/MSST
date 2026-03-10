@@ -9,9 +9,10 @@ import os
 from datetime import datetime
 from clientui.mission import Mission, manager, write_thread_count
 from clientui.task_progress import task_progress
+from utils.constant import get_user_dir, get_cache_dir
 import zipfile
 
-client_dir = Path('E:/MSSTuser')
+client_dir = Path(get_user_dir())
 
 
 def switch2user_tab(req: gr.Request):
@@ -65,7 +66,7 @@ def delete_user(req: gr.Request, username):
 
 
 def clear_cache():
-    cache_dir = os.path.abspath("E:/MSSTcache/")
+    cache_dir = os.path.abspath(get_cache_dir())
     shutil.rmtree(cache_dir, ignore_errors=True)
     gr.Info('清空缓存成功')
 
@@ -187,7 +188,7 @@ def delete_mission(req: gr.Request, mission):
     
     # 清理缓存文件
     try:
-        cache_dir = "E:/MSSTcache"
+        cache_dir = get_cache_dir()
         if os.path.exists(cache_dir):
             # 为避免误删正在使用的临时目录，这里不再删除 preset_task_* 目录
             # 这些目录会在任务结束时自行清理，或通过“清空缓存”功能统一处理

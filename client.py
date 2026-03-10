@@ -93,13 +93,14 @@ def admin_login(username, password):
 def load_client_config():
     """加载客户端配置"""
     client_config_file = "client_config.json"
+    from utils.constant import _default_user_dir, _default_cache_dir, _default_temp_dir
     default_config = {
         "client_port": 7861,
         "server_port": 7860,
         "server_address": "localhost",
-        "user_dir": "E:/MSSTuser",  # 与clientui/actions.py中的设置保持一致
-        "cache_dir": os.path.join(os.path.expanduser("~"), "AppData", "Local", "MSST_WebUI", "cache"),
-        "temp_dir": os.path.join(os.path.expanduser("~"), "AppData", "Local", "MSST_WebUI", "temp"),
+        "user_dir": _default_user_dir(),
+        "cache_dir": _default_cache_dir(),
+        "temp_dir": _default_temp_dir(),
         "auto_clean_temp": True,
         "max_file_size": 100,
         "allowed_formats": ["wav", "mp3", "flac", "m4a", "ogg"]

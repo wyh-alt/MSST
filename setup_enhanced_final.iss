@@ -131,8 +131,16 @@ Name: "{autodesktop}\{#MyAppName} 配置管理工具"; Filename: "{app}\workenv\
 [Run]
 ; 安装完成后运行选项
 Filename: "{app}\workenv\python.exe"; Parameters: "fix_model_paths.py --silent"; WorkingDir: "{app}"; Flags: runhidden; StatusMsg: "正在修复模型目录配置..."; Description: "修复模型目录配置"
+; 添加防火墙入站规则，允许局域网访问
+Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""MSST WebUI Server"" dir=in action=allow protocol=TCP localport=7860"; Flags: runhidden; StatusMsg: "正在配置防火墙规则 (服务端)..."
+Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""MSST WebUI Client"" dir=in action=allow protocol=TCP localport={code:GetClientPort}"; Flags: runhidden; StatusMsg: "正在配置防火墙规则 (客户端)..."
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent unchecked
 Filename: "{app}\workenv\python.exe"; Parameters: "config_manager.py"; WorkingDir: "{app}"; Description: "打开配置管理工具"; Flags: nowait postinstall skipifsilent unchecked
+
+[UninstallRun]
+; 卸载时删除防火墙规则
+Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""MSST WebUI Server"""; Flags: runhidden
+Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""MSST WebUI Client"""; Flags: runhidden
 
 [UninstallDelete]
 ; 卸载时删除的目录和文件
@@ -228,6 +236,13 @@ end;
 function InitializeSetup(): Boolean;
 begin
   Result := True;
+end;
+
+function GetClientPort(Param: String): String;
+begin
+  Result := PortPage.Values[0];
+  if Result = '' then
+    Result := '7861';
 end;
 
 procedure CreateCustomPages;

@@ -10,6 +10,7 @@ from webui.preset import Presets
 from webui.utils import load_configs, get_vr_model, get_msst_model
 from webui.setup import setup_webui, set_debug
 from utils.constant import *
+from utils.constant import get_cache_dir
 from utils.logger import get_logger
 logger = get_logger()
 
@@ -116,7 +117,7 @@ def main(input_folder, store_dir, preset_path, output_format):
         logger.info(f"创建临时目录，只处理缺失的文件")
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
         
         if os.path.exists(TEMP_PATH):
             shutil.rmtree(TEMP_PATH)
@@ -139,7 +140,7 @@ def main(input_folder, store_dir, preset_path, output_format):
         input_to_use = input_folder
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
         
         if os.path.exists(TEMP_PATH):
             shutil.rmtree(TEMP_PATH)

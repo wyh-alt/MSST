@@ -8,6 +8,7 @@ import time
 import multiprocessing
 
 from utils.constant import *
+from utils.constant import get_cache_dir
 from utils.logger import get_logger
 from webui.utils import (
     i18n, 
@@ -20,15 +21,6 @@ from webui.utils import (
     logger,
     detailed_error
 )
-
-def get_cache_dir():
-    """获取缓存目录"""
-    try:
-        with open('client_config.json', 'r', encoding='utf-8') as f:
-            config = json.load(f)
-        return config.get('cache_dir', 'E:/MSSTcache/')
-    except (FileNotFoundError, json.JSONDecodeError):
-        return "E:/MSSTcache/"  # 默认目录
 
 def get_presets_list() -> list:
     if os.path.exists(PRESETS):

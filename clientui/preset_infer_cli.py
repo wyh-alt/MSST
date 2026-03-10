@@ -14,6 +14,7 @@ from webui.preset import Presets
 from webui.utils import load_configs, get_vr_model, get_msst_model
 from webui.setup import setup_webui, set_debug
 from utils.constant import *
+from utils.constant import get_cache_dir
 from utils.logger import get_logger
 
 # 导入任务进度追踪
@@ -294,7 +295,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         print(f"调试信息 - 创建临时目录，只处理缺失的文件")
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
         
         print(f"调试信息 - 临时路径: {TEMP_PATH}")
         
@@ -320,7 +321,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
         input_to_use = input_folder
         import uuid
         task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-        TEMP_PATH = os.path.join("E:/MSSTcache", f"preset_task_{task_id}")
+        TEMP_PATH = os.path.join(get_cache_dir(), f"preset_task_{task_id}")
         
         print(f"调试信息 - 临时路径: {TEMP_PATH}")
         
@@ -488,7 +489,7 @@ def main(input_folder, store_dir, preset_path, output_format, skip_existing_file
                 
                 print(f"调试信息 - [监控线程] 步骤 {current_step + 1} 监控线程已停止 (共检查 {check_count} 次, 更新 {update_count} 次)")
             
-            print(f"调试信息 - 🚀 启动步骤 {current_step + 1} 的进度监控线程")
+            print(f"调试信息 - 启动步骤 {current_step + 1} 的进度监控线程")
             print(f"调试信息 - 监控参数: mission_dir={mission_dir_for_progress}, tmp_store_dir={tmp_store_dir}")
             progress_monitor_thread = threading.Thread(target=monitor_progress, daemon=True)
             progress_monitor_thread.start()
@@ -733,7 +734,7 @@ def main_batch(input_folders, store_dir, preset_path, output_format, skip_existi
     # 使用全局缓存目录，为每个批量任务创建唯一的临时目录
     import uuid
     task_id = str(uuid.uuid4())[:8]  # 使用UUID的前8位作为任务ID
-    TEMP_PATH = os.path.join("E:/MSSTcache", f"batch_task_{task_id}")
+    TEMP_PATH = os.path.join(get_cache_dir(), f"batch_task_{task_id}")
     
     print(f"调试信息 - 批量任务临时路径: {TEMP_PATH}")
     

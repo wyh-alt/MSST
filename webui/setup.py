@@ -71,7 +71,8 @@ def setup_directories():
     # 创建主缓存目录（可配置）
     try:
         # 尝试从配置中获取缓存路径
-        main_cache_path = os.environ.get('MSST_CACHE_DIR', 'E:/MSSTcache')
+        from utils.constant import get_cache_dir
+        main_cache_path = os.environ.get('MSST_CACHE_DIR', get_cache_dir())
         main_cache_created = create_directory_with_fallback(main_cache_path, "主缓存目录")
         created_dirs["main_cache"] = main_cache_created
         

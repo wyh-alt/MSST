@@ -37,6 +37,7 @@ Import this configuration file to access defined paths and settings throughout t
 import os
 import sys
 import json
+import tempfile
 
 # webui config path
 WEBUI_CONFIG = "data/webui_config.json"
@@ -73,8 +74,69 @@ MODELS_INFO = "data/models_info.json"
 # path to pretrain folder
 MODEL_FOLDER = "pretrain"
 
-# path to temp folder
-TEMP_PATH = "E:/MSSTcache/tmpdir"
+
+def _default_cache_dir():
+    """获取默认的缓存目录（可移植路径，不依赖特定盘符）"""
+    if os.name == 'nt':
+        return os.path.join(os.path.expanduser("~"), "AppData", "Local", "MSST_WebUI", "cache").replace('\\', '/')
+    return os.path.join(os.path.expanduser("~"), ".msst_webui", "cache")
+
+
+def _default_user_dir():
+    """获取默认的用户目录（可移植路径，不依赖特定盘符）"""
+    if os.name == 'nt':
+        return os.path.join(os.path.expanduser("~"), "AppData", "Local", "MSST_WebUI", "user").replace('\\', '/')
+    return os.path.join(os.path.expanduser("~"), ".msst_webui", "user")
+
+
+def _default_temp_dir():
+    """获取默认的临时目录（可移植路径）"""
+    if os.name == 'nt':
+        return os.path.join(os.path.expanduser("~"), "AppData", "Local", "MSST_WebUI", "temp").replace('\\', '/')
+    return os.path.join(tempfile.gettempdir(), "MSST_WebUI", "temp")
+
+
+def _read_client_config():
+    """读取客户端配置文件，不存在或解析失败时返回空字典"""
+    try:
+        config_path = 'client_config.json'
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        pass
+    return {}
+
+
+def get_cache_dir():
+    """获取缓存目录，优先读取 client_config.json，否则使用可移植默认路径"""
+    config = _read_client_config()
+    cache_dir = config.get('cache_dir', '')
+    if cache_dir:
+        return cache_dir
+    return _default_cache_dir()
+
+
+def get_user_dir():
+    """获取用户目录，优先读取 client_config.json，否则使用可移植默认路径"""
+    config = _read_client_config()
+    user_dir = config.get('user_dir', '')
+    if user_dir:
+        return user_dir
+    return _default_user_dir()
+
+
+def get_temp_dir():
+    """获取临时目录，优先读取 client_config.json，否则使用可移植默认路径"""
+    config = _read_client_config()
+    temp_dir = config.get('temp_dir', '')
+    if temp_dir:
+        return temp_dir
+    return _default_temp_dir()
+
+
+# path to temp folder (动态获取，不再硬编码盘符)
+TEMP_PATH = os.path.join(get_cache_dir(), "tmpdir")
 
 # path to unoffical model config
 # path to unofficial msst model config: UNOFFICIAL_MODEL/unofficial_msst_model.json
