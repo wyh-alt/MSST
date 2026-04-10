@@ -111,22 +111,31 @@ class TaskProgress:
             
             # 检查总数是否已锁定
             is_locked = current_progress.get('total_files_locked', False)
-            
-            # 如果总数已锁定，不允许更新total_files
-            if is_locked and 'total_files' in progress_update:
-                # 保留原有的总数和锁定状态
-                original_total = current_progress.get('total_files', 0)
-                progress_update_copy = progress_update.copy()
-                progress_update_copy['total_files'] = original_total
-                progress_update_copy['total_files_locked'] = True
-                current_progress.update(progress_update_copy)
-                print(f"调试信息 - 总数已锁定，保持原有总数: {original_total}")
+
+            if 'total_files' in progress_update:
+                incoming_total = progress_update.get('total_files', 0) or 0
+                current_total = current_progress.get('total_files', 0) or 0
+
+                if is_locked and incoming_total <= current_total and current_total > 0:
+                    progress_update_copy = progress_update.copy()
+                    progress_update_copy['total_files'] = current_total
+                    progress_update_copy['total_files_locked'] = True
+                    current_progress.update(progress_update_copy)
+                    print(f"调试信息 - 总数已锁定，保持原有总数: {current_total}")
+                else:
+                    if current_total != incoming_total:
+                        print(f"调试信息 - 更新文件总数: {current_total} -> {incoming_total}")
+                    current_progress.update(progress_update)
+                    if is_locked:
+                        current_progress['total_files_locked'] = True
             else:
-                # 正常更新
-                if 'total_files' in progress_update:
-                    print(f"调试信息 - 更新文件总数: {current_progress.get('total_files', 0)} -> {progress_update['total_files']}")
                 current_progress.update(progress_update)
-                
+
+            total_after = current_progress.get('total_files', 0) or 0
+            processed_after = current_progress.get('processed_files', 0) or 0
+            if total_after > 0 and processed_after > total_after:
+                current_progress['processed_files'] = total_after
+
             current_progress['last_update'] = time.time()
             
             # 保存到文件
@@ -487,32 +496,29 @@ class TaskProgress:
                 try:
                     with open(mission_json, 'r', encoding='utf-8') as f:
                         mission_data = json.load(f)
-                        input_dir = mission_data.get('input_dir', '')
+                    input_dir = mission_data.get('input_dir', '')
                 except (json.JSONDecodeError, RecursionError) as e:
                     print(f"mission.json文件损坏或格式错误: {mission_json}, 错误: {e}")
                     return 1  # 返回默认值
-                    
-                    if input_dir and os.path.exists(input_dir):
-                        # 检查输入目录是否直接包含音频文件
-                        direct_audio_files = []
-                        for file in os.listdir(input_dir):
-                            file_path = os.path.join(input_dir, file)
-                            if os.path.isfile(file_path) and file.lower().endswith(('.wav', '.flac', '.mp3', '.m4a', '.aac', '.ogg')):
-                                direct_audio_files.append(file_path)
-                        
-                        if direct_audio_files:
-                            # 如果输入目录直接包含音频文件，返回文件数量
-                            # print(f"调试信息 - 从原始输入目录统计到 {len(direct_audio_files)} 首歌")  # 注释掉调试信息
-                            return len(direct_audio_files)
-                        else:
-                            # 如果输入目录包含子目录，统计子目录数量（每个子目录代表一首歌）
-                            subdirs = []
-                            for item in os.listdir(input_dir):
-                                item_path = os.path.join(input_dir, item)
-                                if os.path.isdir(item_path):
-                                    subdirs.append(item_path)
-                            # print(f"调试信息 - 从原始输入目录的子目录统计到 {len(subdirs)} 首歌")  # 注释掉调试信息
-                            return len(subdirs)
+
+                if input_dir and os.path.exists(input_dir):
+                    # 检查输入目录是否直接包含音频文件
+                    direct_audio_files = []
+                    for file in os.listdir(input_dir):
+                        file_path = os.path.join(input_dir, file)
+                        if os.path.isfile(file_path) and file.lower().endswith(('.wav', '.flac', '.mp3', '.m4a', '.aac', '.ogg')):
+                            direct_audio_files.append(file_path)
+
+                    if direct_audio_files:
+                        return len(direct_audio_files)
+
+                    # 如果输入目录包含子目录，统计子目录数量（每个子目录代表一首歌）
+                    subdirs = []
+                    for item in os.listdir(input_dir):
+                        item_path = os.path.join(input_dir, item)
+                        if os.path.isdir(item_path):
+                            subdirs.append(item_path)
+                    return len(subdirs)
         except Exception as e:
             print(f"统计输入歌曲数量时出错: {e}")
             
