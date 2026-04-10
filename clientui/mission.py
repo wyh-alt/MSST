@@ -35,6 +35,7 @@ class Mission:
     def __init__(self):
         self.input_dir = ''
         self.input_dirs = []  # 批量处理时的输入目录列表
+        self.batch_mission_dirs = []  # 批量处理时对应的任务目录列表（用于删除/终止定位）
         self.output_dir = ''
         self.preset_name = ''
         self.output_format = 'wav'
@@ -51,6 +52,7 @@ class Mission:
         mission = Mission()
         mission.input_dir = self.input_dir
         mission.input_dirs = self.input_dirs.copy() if self.input_dirs else []
+        mission.batch_mission_dirs = self.batch_mission_dirs.copy() if self.batch_mission_dirs else []
         mission.output_dir = self.output_dir
         mission.preset_name = self.preset_name
         mission.output_format = self.output_format
@@ -560,29 +562,26 @@ class Manager:
         script = current_dir / "clientui" / "preset_infer_cli.py"
         preset_path = current_dir / "presets" / first.preset_name
         
-        # 构建命令，修复--debug参数
         cmd_parts = [
-            f'"{python}"',
-            f'"{script}"',
-            '-p', f'"{preset_path}"',
-            '-i', f'"{first.input_dir}"',
-            '-o', f'"{first.output_dir}"',
-            '-f', first.output_format
+            str(python),
+            str(script),
+            "-p", str(preset_path),
+            "-i", str(first.input_dir),
+            "-o", str(first.output_dir),
+            "-f", str(first.output_format),
         ]
         
         # 只在debug为True时添加--debug标志
         if first.debug:
             cmd_parts.append('--debug')
-        
-        cmd = ' '.join(cmd_parts)
-        
-        print(f"调试信息 - 执行命令: {cmd}")
+
+        print(f"调试信息 - 执行命令: {' '.join(cmd_parts)}")
         print(f"调试信息 - Python路径: {python}")
         print(f"调试信息 - 脚本路径: {script}")
         print(f"调试信息 - 预设路径: {preset_path}")
         
         try:
-            first.executor.execute_command(cmd)
+            first.executor.execute_command(cmd_parts)
             first.running = True
             first.state = 'running'
             # 记录处理开始时间
@@ -625,6 +624,11 @@ class Manager:
         # 创建批量任务
         batch_mission = first_mission.cp()
         batch_mission.input_dirs = [m.input_dir for m in batch_missions]
+        batch_mission.batch_mission_dirs = [
+            (m.mission_dir if getattr(m, "mission_dir", "") else os.path.dirname(str(m.output_file)))
+            for m in batch_missions
+            if getattr(m, "output_file", None) is not None or getattr(m, "mission_dir", "")
+        ]
         batch_mission.output_dir = os.path.join(os.path.dirname(first_mission.output_dir), "batch_output")
         batch_mission.mission_dir = os.path.dirname(first_mission.output_file)
         
@@ -644,31 +648,28 @@ class Manager:
         script = current_dir / "clientui" / "preset_infer_cli.py"
         preset_path = current_dir / "presets" / batch_mission.preset_name
         
-        # 构建批量处理命令
         cmd_parts = [
-            f'"{python}"',
-            f'"{script}"',
-            '--batch',  # 添加批量处理标志
-            '-p', f'"{preset_path}"',
-            '-o', f'"{batch_mission.output_dir}"',
-            '-f', batch_mission.output_format
+            str(python),
+            str(script),
+            "--batch",
+            "-p", str(preset_path),
+            "-o", str(batch_mission.output_dir),
+            "-f", str(batch_mission.output_format),
         ]
         
         # 添加输入目录列表
         for input_dir in batch_mission.input_dirs:
-            cmd_parts.extend(['-i', f'"{input_dir}"'])
+            cmd_parts.extend(["-i", str(input_dir)])
         
         # 只在debug为True时添加--debug标志
         if batch_mission.debug:
             cmd_parts.append('--debug')
-        
-        cmd = ' '.join(cmd_parts)
-        
-        print(f"调试信息 - 执行批量命令: {cmd}")
+
+        print(f"调试信息 - 执行批量命令: {' '.join(cmd_parts)}")
         print(f"调试信息 - 批量处理 {len(batch_mission.input_dirs)} 个目录")
         
         try:
-            batch_mission.executor.execute_command(cmd)
+            batch_mission.executor.execute_command(cmd_parts)
             batch_mission.running = True
             batch_mission.state = 'running'
             # 记录处理开始时间
