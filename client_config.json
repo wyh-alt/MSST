@@ -1,0 +1,17 @@
+{
+    "client_port": 7861,
+    "server_port": 7860,
+    "server_address": "localhost",
+    "user_dir": "E:/user",
+    "cache_dir": "E:/cache",
+    "temp_dir": "E:/cache/temp",
+    "auto_clean_temp": true,
+    "max_file_size": 100,
+    "allowed_formats": [
+        "wav",
+        "mp3",
+        "flac",
+        "m4a",
+        "ogg"
+    ]
+}

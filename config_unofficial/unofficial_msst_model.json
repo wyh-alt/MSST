@@ -1,0 +1,32 @@
+{
+    "multi_stem_models": [
+        {
+            "name": "logic_bs_roformer.ckpt",
+            "config_path": "config_unofficial\\msst_config\\logic_pro_config.yaml",
+            "model_type": "bs_roformer",
+            "link": ""
+        }
+    ],
+    "single_stem_models": [
+        {
+            "name": "dereverb_echo_mbr_v2_sdr_dry_13.4843.ckpt",
+            "config_path": "config_unofficial\\msst_config\\config_dereverb_echo_mbr_v2.yaml",
+            "model_type": "mel_band_roformer",
+            "link": ""
+        }
+    ],
+    "vocal_models": [
+        {
+            "name": "mel_band_roformer_karaoke_becruily.ckpt",
+            "config_path": "config_unofficial\\msst_config\\config_karaoke_becruily.yaml",
+            "model_type": "mel_band_roformer",
+            "link": ""
+        },
+        {
+            "name": "voc_fv4.ckpt",
+            "config_path": "config_unofficial\\msst_config\\voc_gabox.yaml",
+            "model_type": "mel_band_roformer",
+            "link": ""
+        }
+    ]
+}

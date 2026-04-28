@@ -1,0 +1,10 @@
+{
+    "install_path": "E:/MSST WebUI",
+    "client_port": 7861,
+    "server_port": 7860,
+    "username": "admin",
+    "user_dir": "E:/user",
+    "cache_dir": "E:/cache",
+    "install_date": "2026-03-10 14:52:42",
+    "version": "1.0.0"
+}

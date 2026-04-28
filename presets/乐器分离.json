@@ -1,0 +1,19 @@
+{
+    "version": "1.0.0",
+    "name": "\u4e50\u5668\u5206\u79bb",
+    "flow": [
+        {
+            "model_type": "multi_stem_models",
+            "model_name": "logic_bs_roformer.ckpt",
+            "input_to_next": "bass",
+            "output_to_storage": [
+                "bass",
+                "piano",
+                "drums",
+                "other",
+                "vocals",
+                "guitar"
+            ]
+        }
+    ]
+}

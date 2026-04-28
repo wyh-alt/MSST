@@ -1,0 +1,27 @@
+{
+    "total_files": 1,
+    "processed_files": 0,
+    "last_update": 1774320858.299639,
+    "start_time": 1774320810.6774752,
+    "status": "waiting",
+    "details": [],
+    "total_files_locked": false,
+    "step_progress": {
+        "step1": {
+            "name": "model_vocals_mdx23c_sdr_10.17.ckpt",
+            "processed": 1,
+            "total": 1
+        },
+        "step2": {
+            "name": "5_HP-Karaoke-UVR.pth",
+            "processed": 1,
+            "total": 1
+        },
+        "step3": {
+            "name": "UVR-DeEcho-DeReverb.pth",
+            "processed": 0,
+            "total": 1
+        }
+    },
+    "total_steps": 3
+}

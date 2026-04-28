@@ -1,0 +1,26 @@
+{
+    "version": "1.0.0",
+    "name": "\u63d0\u53d6\u5e72\u58f0_test",
+    "flow": [
+        {
+            "model_type": "vocal_models",
+            "model_name": "voc_fv4.ckpt",
+            "input_to_next": "Vocals",
+            "output_to_storage": []
+        },
+        {
+            "model_type": "single_stem_models",
+            "model_name": "dereverb_echo_mbr_v2_sdr_dry_13.4843.ckpt",
+            "input_to_next": "dry",
+            "output_to_storage": []
+        },
+        {
+            "model_type": "vocal_models",
+            "model_name": "model_mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt",
+            "input_to_next": "karaoke",
+            "output_to_storage": [
+                "karaoke"
+            ]
+        }
+    ]
+}

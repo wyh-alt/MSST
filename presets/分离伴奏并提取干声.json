@@ -1,0 +1,28 @@
+{
+    "version": "1.0.0",
+    "name": "\u5206\u79bb\u4f34\u594f\u5e76\u63d0\u53d6\u5e72\u58f0",
+    "flow": [
+        {
+            "model_type": "vocal_models",
+            "model_name": "model_vocals_mdx23c_sdr_10.17.ckpt",
+            "input_to_next": "vocals",
+            "output_to_storage": [
+                "other"
+            ]
+        },
+        {
+            "model_type": "UVR_VR_Models",
+            "model_name": "5_HP-Karaoke-UVR.pth",
+            "input_to_next": "Vocals",
+            "output_to_storage": []
+        },
+        {
+            "model_type": "UVR_VR_Models",
+            "model_name": "UVR-DeEcho-DeReverb.pth",
+            "input_to_next": "No Reverb",
+            "output_to_storage": [
+                "No Reverb"
+            ]
+        }
+    ]
+}
