@@ -43,6 +43,7 @@ logs/
 # Cache
 cache/
 .cache/
+_api_jobs/
 
 # Output directories
 results/
